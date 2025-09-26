@@ -48,6 +48,19 @@ bool onAnimation=true; // Indica si tengo que poner la animación
 bool enJuegoFinal = false; // Indica si estoy en el juego final
 int spriteFinalenUso = 1; // Indica si el sprite final que se está mostrando es el de proceder(1) o cancelar (2)
 
+static constexpr int TFT_MYORANGE      = 0xFA00; 
+
+const int COLOR_PROCEDER = TFT_MYORANGE;
+const int COLOR_CANCELAR = TFT_SKYBLUE;
+const int COLOR_SELLO = TFT_PURPLE;
+
+
+// --- Contador táctil en juego final ---
+bool touchCounting = false;
+uint32_t touchStartMs = 0;
+int lastShownCount = 0;
+int secondsToSelect = 6; // segundos que hay que mantener el toque para seleccionar
+
 // Animation
 bool startupAnimationPlayed = false;
 
@@ -242,7 +255,7 @@ void postRule(AsyncWebServerRequest *request, uint8_t *data)
     request->send(200, "application/json", "{\"status\":\"finalgame started\"}");
     Serial.println("Command received: finalgame");
     // TODO: poner en spriteFinalEnUso el que corresponda a cada sello
-    LoadSpriteKarma(deviceId+(spriteFinalenUso*5),TFT_PINK);
+    LoadSpriteKarma(deviceId+(spriteFinalenUso*5),COLOR_PROCEDER);
    
   }
   else
@@ -261,7 +274,7 @@ void playMatrixRain() {
   // matrixSprite.setFreeFont(&NotoSansDevanagari_Regular5pt7b); // Not using this one because converters did not convert all the characters
   matrixSprite.setTextSize(2);
   matrixSprite.setTextFont(1);  // basic built-in font
-  matrixSprite.setTextColor(TFT_PURPLE, TFT_BLACK);
+  matrixSprite.setTextColor(COLOR_SELLO, TFT_BLACK);
 
   
   // matrixSprite.drawString("नमस्ते", 10, 10);
@@ -375,7 +388,7 @@ void AnimateAndWaitForStart()
     Serial.print("Device Id:");
     Serial.println(deviceId);
 
-    LoadSpriteKarma(deviceId,TFT_PURPLE);
+    LoadSpriteKarma(deviceId,COLOR_SELLO);
 }
 
 void setup() {
@@ -545,13 +558,13 @@ void updateSprite(int newValor)
         if (spriteFinalenUso != 1) {
           Serial.println("Cambio sprite a proceder");
           spriteFinalenUso = 1; // sprite de proceder
-          LoadSpriteKarma(deviceId + (spriteFinalenUso * 5), TFT_PINK);
+          LoadSpriteKarma(deviceId + (spriteFinalenUso * 5), COLOR_PROCEDER);
         }
       } else {
         if (spriteFinalenUso != 2) {
           Serial.println("Cambio sprite a cancelar");
           spriteFinalenUso = 2; // sprite de cancelar
-          LoadSpriteKarma(deviceId + (spriteFinalenUso * 5), TFT_SKYBLUE);
+          LoadSpriteKarma(deviceId + (spriteFinalenUso * 5), COLOR_CANCELAR);
         }
       }
     }
@@ -594,9 +607,80 @@ void sendEncoderToApiHttp(int device, int step_mode, int step_size, int transiti
 }
 */
 
+// Dibuja un número grande centrado (sobre fondo negro)
+void drawCenterNumber(int n, int newPosition) {
+  M5Dial.Lcd.fillScreen(TFT_BLACK);
+
+  // tipografía básica, grande y blanca
+  // si estoy en Cancelar uso el color COLOR_CANCELAR para la letra
+  if (spriteFinalenUso == 2) {
+    M5Dial.Lcd.setTextColor(COLOR_CANCELAR, TFT_BLACK);
+  } else {
+    M5Dial.Lcd.setTextColor(COLOR_PROCEDER, TFT_BLACK);
+  }
+  M5Dial.Lcd.setTextFont(1);      // fuente built-in
+  M5Dial.Lcd.setTextSize(12);      // tamaño grande (ajusta si quieres más/menos)
+
+  String s = String(n);
+  int16_t tw = M5Dial.Lcd.textWidth(s);
+  int16_t th = M5Dial.Lcd.fontHeight();
+
+  int x = (240 - tw) / 2;
+  int y = (240 - th) / 2;
+  M5Dial.Lcd.setCursor(x, y);
+
+  // Que el numero este rotado igual que el sprite
+  /* Desestimado - esto rota todo y destruye el resto del movimiento
+  int angle = calculateDialAngle(newPosition);
+
+  M5Dial.Lcd.setRotation(angle);
+  */
+  M5Dial.Lcd.print(s);
+}
+
+// Restaura la vista anterior (sprite rotado según la posición actual)
+void restoreRotatedSprite() {
+  // Redibuja el sprite rotado con el ángulo/posición que ya tengas
+  updateSprite(oldPosition);
+}
+void Check4TouchToPrint(int newPosition)
+{
+  // --- LÓGICA DE TOUCH PARA EL JUEGO FINAL ---
+  if (enJuegoFinal) {
+    auto t = M5Dial.Touch.getDetail();
+
+    if (t.isPressed()) {
+      // Inicio del toque
+      if (!touchCounting) {
+        touchCounting = true;
+        touchStartMs = millis();
+        lastShownCount = 0;      // forzar que pinte "1" al segundo 0-999ms
+      }
+
+      // Calcular segundos transcurridos (1..5)
+      uint32_t elapsed = millis() - touchStartMs;
+      int secs = (int)(elapsed / 1000) + 1;   // 0–999ms => 1, 1000–1999 => 2, etc.
+      if (secs > secondsToSelect) secs = secondsToSelect;
+
+      if (secs != lastShownCount) {
+        drawCenterNumber(secs, newPosition);
+        lastShownCount = secs;
+      }
+    } else {
+      // Soltó el toque
+      if (touchCounting) {
+        touchCounting = false;
+        // Quitar el número: restaurar la vista previa
+        restoreRotatedSprite();
+      }
+    }
+  }
+
+}
+
 int mostreCore = 0;
 void loop() {
-    // M5Dial.update();
+    M5Dial.update();
     ArduinoOTA.handle();
     if (mostreCore == 0)
     {
@@ -613,6 +697,8 @@ void loop() {
       AnimateAndWaitForStart();
       gameStarted = true; // Si hizo la animación y entró en lo normal, hay que mandar los mensajes
     }
+
+ 
     newPosition = M5Dial.Encoder.read();
 
     newPosition = newPosition + positionAdjustment;
@@ -632,5 +718,8 @@ void loop() {
         
         value2Send = newPosition;
 
+        
     }
+    Check4TouchToPrint(newPosition);
+
 }
