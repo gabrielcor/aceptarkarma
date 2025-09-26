@@ -26,6 +26,9 @@
 #include "../include/Asmoday_seal.h"
 #include "../include/Belial_seal.h"
 #include "../include/Paimon_seal.h"
+#include "../include/Paimon_seal_accept.h"
+#include "../include/Paimon_seal_cancel.h"
+
 // Converted with https://rop.nl/truetype2gfx/
 // #include "include/NotoSansDevanagari_Regular20pt7b.h"
 // #include "include/NotoSansDevanagari_Regular5pt7b.h"
@@ -34,7 +37,8 @@
 AsyncWebServer server(80);         // to handle the published API
 bool gameStarted = false; // estado del "juego" o del control. 
 bool onAnimation=true; // Indica si tengo que poner la animación
-
+bool enJuegoFinal = false; // Indica si estoy en el juego final
+bool spriteFinalenUso = 1; // Indica si el sprite final que se está mostrando es el de proceder(1) o cancelar (2)
 
 // Animation
 bool startupAnimationPlayed = false;
@@ -53,10 +57,14 @@ int dropY[cols];  // current position of head per column
 // end animation
 
 // Array of all bitmaps for convenience. (Total bytes used to store images in PROGMEM = 5024)
-const int epd_bitmap_allArray_LEN = 5;
-const unsigned char* epd_bitmap_allArray[5] = {
-	epd_bitmap_250px_32_Asmoday_seal, epd_bitmap_01_Bael_seal, epd_bitmap_250px_09_Paimon_seal01, epd_bitmap_62_Valac_seal, epd_bitmap_250px_68_Belial_seal  
+const int epd_bitmap_allArray_LEN = 15;
+
+const unsigned char* epd_bitmap_allArray[15] = {
+	epd_bitmap_250px_32_Asmoday_seal, epd_bitmap_01_Bael_seal, epd_bitmap_250px_09_Paimon_seal01, epd_bitmap_62_Valac_seal, epd_bitmap_250px_68_Belial_seal,
+  epd_bitmap_250px_32_Asmoday_seal, epd_bitmap_01_Bael_seal, epd_bitmap_250px_09_Paimon_seal01_Accept, epd_bitmap_62_Valac_seal, epd_bitmap_250px_68_Belial_seal,
+  epd_bitmap_250px_32_Asmoday_seal, epd_bitmap_01_Bael_seal, epd_bitmap_250px_09_Paimon_seal01_Cancel, epd_bitmap_62_Valac_seal, epd_bitmap_250px_68_Belial_seal      
 };
+
 
 const char *ssid ="blackcrow_prod01";
 const char *password = "e2aVwqCtfc5EsgGE852E";
@@ -74,6 +82,9 @@ WiFiUDP udp;
 
 long oldPosition = -999;
 long newPosition = -999;
+
+long startPositionEndGame = -999;
+
 int positionAdjustment = 0; // cuanto se ajusta lo que el dial tiene como valor hacia el envío para que coincida con la posición unity
 int hasChanged = 0;
 long value2Send = 0;
@@ -215,9 +226,12 @@ void postRule(AsyncWebServerRequest *request, uint8_t *data)
   }
   else if (receivedData.indexOf("finalgame") != -1)
   {
+    startPositionEndGame = oldPosition; // Guardar la posición de inicio del juego final
+    enJuegoFinal = true;
     request->send(200, "application/json", "{\"status\":\"finalgame started\"}");
     Serial.println("Command received: finalgame");
-    LoadSpriteKarma(deviceId+1,TFT_GREEN);
+    // TODO: poner en spriteFinalEnUso el que corresponda a cada sello
+    LoadSpriteKarma(deviceId+(spriteFinalenUso*5),TFT_PINK);
    
   }
   else
@@ -343,6 +357,13 @@ void AnimateAndWaitForStart()
     Serial.println("Starting animation...");
     playMatrixRain();
     Serial.println("End animation...");
+    Serial.print("IP Address: ");
+    Serial.println(WiFi.localIP());
+    Serial.print("MAC Adress:");
+    Serial.println(WiFi.macAddress());
+    Serial.print("Device Id:");
+    Serial.println(deviceId);
+
     LoadSpriteKarma(deviceId,TFT_PURPLE);
 }
 
@@ -482,6 +503,25 @@ float calculateDialAngle(int position) {
 
 void updateSprite(int newValor)
 {
+  // Si estoy en el juego final, el valor + 90 y el valor -90 se mantiene el sprite que había, si paso de ahí, cambio el sprite y
+  if (enJuegoFinal) 
+  {
+    Serial.print("newValor: ");
+    Serial.println(newValor);
+    Serial.print("startPositionEndGame: ");
+    Serial.println(startPositionEndGame);
+
+    if (newValor > startPositionEndGame + 90 || newValor < startPositionEndGame - 90)
+    {
+      Serial.println("Cambio sprite a cancelar");
+      spriteFinalenUso = 2; // sprite de cancelar
+      LoadSpriteKarma(deviceId+(spriteFinalenUso*5),TFT_PINK);
+    }
+    else
+    {
+    }
+  }
+   
   int angle = calculateDialAngle(newValor);
   sprite.pushRotated(angle);
 }  
