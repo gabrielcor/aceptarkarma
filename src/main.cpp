@@ -122,6 +122,45 @@ void Task1code( void * parameter) {
   
 }
 
+
+void LoadSpriteKarma(int whichDevice, int whichColor)
+{
+
+  // Sprite def
+  // screen size
+  int scrS = 240; // M5Dial
+  // bitmap width/height
+  int bmpW = 200;
+  int bmpH = bmpW;
+  // sprite width / height
+  int sprW = 200;
+  int sprH = sprW;
+  // bitmap x,y
+  int bmpX = (sprW - bmpW) / 2;
+  int bmpY = (sprH - bmpH) / 2;
+  // sprite placement
+  int sppX = (scrS - sprW) / 2;
+  int sppY = (scrS - sprH) / 2;
+
+  int tftColor = whichColor;
+  // Sprite
+
+  const unsigned char *bitmapToShow;
+  bitmapToShow = epd_bitmap_allArray[whichDevice];
+
+  M5Dial.Lcd.clearDisplay(TFT_BLACK);
+  sprite.setPsram(true);           // Optional if using large sprites
+  sprite.createSprite(sprW, sprH); // Create a sprite of size 200x50
+  sprite.fillScreen(TFT_BLACK);    // Clear sprite background
+  sprite.drawBitmap(bmpX, bmpY, bitmapToShow, bmpW, bmpH, TFT_BLACK, tftColor);
+  sprite.pushSprite(sppX, sppY);
+  // Rotate and display the sprite at an arbitrary angle
+  float angle = 0; // Angle in degrees
+  sprite.pushRotated(angle);
+  oldPosition = -999;
+}
+
+
 /// @brief Handle the API call
 /// @param request full request
 /// @param data JSON data
@@ -173,6 +212,13 @@ void postRule(AsyncWebServerRequest *request, uint8_t *data)
     delay(100); // allow time for response to be sent
     esp_restart();
     return; // technically not needed, but explicit
+  }
+  else if (receivedData.indexOf("finalgame") != -1)
+  {
+    request->send(200, "application/json", "{\"status\":\"finalgame started\"}");
+    Serial.println("Command received: finalgame");
+    LoadSpriteKarma(deviceId+1,TFT_GREEN);
+   
   }
   else
   {
@@ -297,51 +343,7 @@ void AnimateAndWaitForStart()
     Serial.println("Starting animation...");
     playMatrixRain();
     Serial.println("End animation...");
-
-    // Sprite def
-    // screen size
-    int scrS = 240; // M5Dial
-    // bitmap width/height
-    int bmpW = 200;
-    int bmpH = bmpW;
-    // sprite width / height
-    int sprW = 200;
-    int sprH = sprW;
-    // bitmap x,y
-    int bmpX = (sprW - bmpW) / 2;
-    int bmpY = (sprH - bmpH) / 2;
-    // sprite placement
-    int sppX = (scrS - sprW) / 2;
-    int sppY = (scrS - sprH) / 2;
-    
-    int tftColor = TFT_PURPLE;
-    // Sprite
-
-    const unsigned char* bitmapToShow;
-    bitmapToShow = epd_bitmap_allArray[deviceId];
-    
-    M5Dial.Lcd.clearDisplay(TFT_BLACK);
-    sprite.setPsram(true);  // Optional if using large sprites
-    sprite.createSprite(sprW,sprH); // Create a sprite of size 200x50
-    sprite.fillScreen(TFT_BLACK); // Clear sprite background
-    sprite.drawBitmap(bmpX, bmpY, bitmapToShow , bmpW, bmpH, TFT_BLACK, tftColor);
-    sprite.pushSprite(sppX,sppY);
-    // Rotate and display the sprite at an arbitrary angle
-    float angle = 0; // Angle in degrees
-    sprite.pushRotated(angle);
-
-    /*
-    Serial.println("Starting animation...");
-
-    if (!startupAnimationPlayed) {
-      playStartupRainAnimation(240, sprite,sppX,sppY);
-      startupAnimationPlayed = true;
-    }
-
-    Serial.println("Animation ended...");
-    delay(1000);
-    */
-
+    LoadSpriteKarma(deviceId,TFT_PURPLE);
 }
 
 void setup() {
