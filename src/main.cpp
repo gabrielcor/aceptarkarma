@@ -18,9 +18,7 @@
 #include "M5Dial.h"
 #include <WiFi.h>
 #include <ESPAsyncWebServer.h>
-// #include <HTTPClient.h>
 #include  <WiFiUdp.h>
-// #include "testpng.h"
 #include "../include/Bael_seal.h"
 #include "../include/Bael_seal_accept.h"
 #include "../include/Bael_seal_cancel.h"
@@ -47,13 +45,15 @@ bool gameStarted = false; // estado del "juego" o del control.
 bool onAnimation=true; // Indica si tengo que poner la animación
 bool enJuegoFinal = false; // Indica si estoy en el juego final
 int spriteFinalenUso = 1; // Indica si el sprite final que se está mostrando es el de proceder(1) o cancelar (2)
+long oldPosition = -999;
+long newPosition = -999;
 
 static constexpr int TFT_MYORANGE      = 0xFA00; 
 
 const int COLOR_PROCEDER = TFT_MYORANGE;
 const int COLOR_CANCELAR = TFT_SKYBLUE;
 const int COLOR_SELLO = TFT_PURPLE;
-
+const int K_M5VOLUME = 255; // volumen del buzzer 0-255
 
 // --- Contador táctil en juego final ---
 bool touchCounting = false;
@@ -68,8 +68,6 @@ uint32_t lastBlinkToggleMs = 0;     // última vez que se invirtió el estado
 int freezePositionAtSelect = 0;     // posición congelada para mostrar el sprite fijo mientras blinquea
 const uint32_t BLINK_INTERVAL_MS = 1000;  // 1 segundo on/off
 
-// Animation
-bool startupAnimationPlayed = false;
 
 // Matrix animation
 lgfx::LGFX_Sprite matrixSprite(&M5Dial.Lcd);
@@ -110,8 +108,6 @@ const int udpPort = 8080;
 
 WiFiUDP udp;
 
-long oldPosition = -999;
-long newPosition = -999;
 
 long startPositionEndGame = -999;
 
@@ -151,7 +147,7 @@ void Task1code( void * parameter) {
     if (hasChanged == 1)
     {
       hasChanged = 0;
-      if (gameStarted)
+      if (gameStarted && !enJuegoFinal)
       {
         int envioValor = value2Send; // lo guardo porque entre que lo envío y lo guardo como previo, puede cambiar
         sendEncoderToApi(deviceId,changeDirection,envioValor,prevValue);
@@ -226,12 +222,16 @@ void postRule(AsyncWebServerRequest *request, uint8_t *data)
   {
     gameStarted = true;
     onAnimation = true;
+    oldPosition = -999;
+    newPosition = -999;
+
     request->send(200, "application/json", "{\"status\":\"game started\"}");
     Serial.println("Command received: start");
   }
   else if (receivedData.indexOf("shutdown") != -1)
   {
     gameStarted = false;
+    M5Dial.Lcd.clearDisplay(TFT_BLACK);
     request->send(200, "application/json", "{\"status\":\"game shutdown\"}");
     Serial.println("Command received: shutdown");
   }
@@ -386,6 +386,9 @@ void playStartupRainAnimation(int frames, lgfx::LGFX_Sprite animSprite, int sppX
 void AnimateAndWaitForStart()
 {
     Serial.println("Starting animation...");
+    sprite.deleteSprite();        // seal sprite (if any)
+    matrixSprite.deleteSprite();  // in case a previous run left it allocated
+
     playMatrixRain();
     Serial.println("End animation...");
     Serial.print("IP Address: ");
@@ -502,7 +505,7 @@ void setup() {
     M5Dial.begin(cfg, true, false);
     // Audio / buzzer
     M5.Speaker.begin();
-    M5.Speaker.setVolume(128);  // 0-255 (ajusta gusto; 96-160 suele ir bien)
+    M5.Speaker.setVolume(K_M5VOLUME);  // 0-255 (ajusta gusto; 96-160 suele ir bien)
 
 
 
@@ -786,7 +789,7 @@ void loop() {
     newPosition = newPosition + positionAdjustment;
 
     if (newPosition != oldPosition) {
-        if (!blinkEnabled && !touchCounting) // hacer que si está en blink o contando toque, no actualice el sprite
+        if (gameStarted && !blinkEnabled && !touchCounting) // hacer que si está en blink o contando toque, no actualice el sprite
         {
           updateSprite(newPosition);
         }
