@@ -61,6 +61,13 @@ uint32_t touchStartMs = 0;
 int lastShownCount = 0;
 int secondsToSelect = 6; // segundos que hay que mantener el toque para seleccionar
 
+// --- Blink a 6s ---
+bool blinkEnabled = false;          // ¿estamos parpadeando?
+bool blinkState = false;            // ON (se ve) / OFF (oculto)
+uint32_t lastBlinkToggleMs = 0;     // última vez que se invirtió el estado
+int freezePositionAtSelect = 0;     // posición congelada para mostrar el sprite fijo mientras blinquea
+const uint32_t BLINK_INTERVAL_MS = 1000;  // 1 segundo on/off
+
 // Animation
 bool startupAnimationPlayed = false;
 
@@ -493,6 +500,10 @@ void setup() {
 
     auto cfg = M5.config();
     M5Dial.begin(cfg, true, false);
+    // Audio / buzzer
+    M5.Speaker.begin();
+    M5.Speaker.setVolume(128);  // 0-255 (ajusta gusto; 96-160 suele ir bien)
+
 
 
     // Start API server
@@ -607,17 +618,51 @@ void sendEncoderToApiHttp(int device, int step_mode, int step_size, int transiti
 }
 */
 
+// Dibuja el mismo número en 6 posiciones tipo reloj: 11,1,3,5,7,9
+void drawRadialCopies(const String& s, uint16_t color) {
+  const int cx = 120;              // centro pantalla 240x240
+  const int cy = 120;
+  const int r  = 88;               // radio (ajusta si lo quieres más adentro/afuera)
+
+  // Usamos la misma fuente/tamaño que el número central, pero más pequeño para no tapar
+  M5Dial.Lcd.setTextFont(1);       
+  M5Dial.Lcd.setTextSize(3);       // tamaño radial (ajusta si quieres)
+  M5Dial.Lcd.setTextColor(color, TFT_BLACK);
+
+  int16_t tw = M5Dial.Lcd.textWidth(s);
+  int16_t th = M5Dial.Lcd.fontHeight();
+
+  auto putAt = [&](float deg){
+    float rad = deg * 3.1415926535f / 180.0f;
+    int x = (int)roundf(cx + r * cosf(rad));
+    int y = (int)roundf(cy - r * sinf(rad));   // y invertida (arriba = menor y)
+    // centrar el texto en (x,y)
+    M5Dial.Lcd.setCursor(x - tw/2, y - th/2);
+    M5Dial.Lcd.print(s);
+  };
+
+  // Posiciones: 11, 1, 3, 5, 7, 9 → 330°, 30°, 90°, 150°, 210°, 270°
+  putAt(330.0f);
+  putAt(30.0f);
+  putAt(90.0f);
+  putAt(150.0f);
+  putAt(210.0f);
+  putAt(270.0f);
+}
+
 // Dibuja un número grande centrado (sobre fondo negro)
 void drawCenterNumber(int n, int newPosition) {
   M5Dial.Lcd.fillScreen(TFT_BLACK);
 
   // tipografía básica, grande y blanca
   // si estoy en Cancelar uso el color COLOR_CANCELAR para la letra
+  int colorNum;
   if (spriteFinalenUso == 2) {
-    M5Dial.Lcd.setTextColor(COLOR_CANCELAR, TFT_BLACK);
+    colorNum = COLOR_CANCELAR;
   } else {
-    M5Dial.Lcd.setTextColor(COLOR_PROCEDER, TFT_BLACK);
+    colorNum = COLOR_PROCEDER;
   }
+  M5Dial.Lcd.setTextColor(colorNum, TFT_BLACK);
   M5Dial.Lcd.setTextFont(1);      // fuente built-in
   M5Dial.Lcd.setTextSize(12);      // tamaño grande (ajusta si quieres más/menos)
 
@@ -636,46 +681,85 @@ void drawCenterNumber(int n, int newPosition) {
   M5Dial.Lcd.setRotation(angle);
   */
   M5Dial.Lcd.print(s);
+  // Copias radiales (más pequeñas)
+  drawRadialCopies(s, colorNum);
 }
 
-// Restaura la vista anterior (sprite rotado según la posición actual)
+void showFrozenSprite() {
+  updateSprite(freezePositionAtSelect);
+  // tono grave ON (duración 0 = sostenido hasta stop)
+  M5.Speaker.tone(110 /*Hz*/, 0 /*ms*/);  // prueba 90, 100, 110, 120 Hz
+}
+
+void hideSprite() {
+  M5Dial.Lcd.fillScreen(TFT_BLACK);
+  // tono OFF
+  M5.Speaker.stop();
+}
+
+
 void restoreRotatedSprite() {
-  // Redibuja el sprite rotado con el ángulo/posición que ya tengas
-  updateSprite(oldPosition);
-}
-void Check4TouchToPrint(int newPosition)
-{
-  // --- LÓGICA DE TOUCH PARA EL JUEGO FINAL ---
-  if (enJuegoFinal) {
-    auto t = M5Dial.Touch.getDetail();
-
-    if (t.isPressed()) {
-      // Inicio del toque
-      if (!touchCounting) {
-        touchCounting = true;
-        touchStartMs = millis();
-        lastShownCount = 0;      // forzar que pinte "1" al segundo 0-999ms
-      }
-
-      // Calcular segundos transcurridos (1..5)
-      uint32_t elapsed = millis() - touchStartMs;
-      int secs = (int)(elapsed / 1000) + 1;   // 0–999ms => 1, 1000–1999 => 2, etc.
-      if (secs > secondsToSelect) secs = secondsToSelect;
-
-      if (secs != lastShownCount) {
-        drawCenterNumber(secs, newPosition);
-        lastShownCount = secs;
-      }
-    } else {
-      // Soltó el toque
-      if (touchCounting) {
-        touchCounting = false;
-        // Quitar el número: restaurar la vista previa
-        restoreRotatedSprite();
-      }
-    }
+   // Redibuja el sprite rotado con el ángulo/posición que ya tengas
+    updateSprite(oldPosition); 
   }
 
+void Check4TouchToPrint(int newPosition)
+{
+  if (!enJuegoFinal) return;
+
+  auto t = M5Dial.Touch.getDetail();
+
+  if (t.isPressed()) {
+    // Si recién empieza el toque, inicializa el conteo
+    if (!touchCounting) {
+      touchCounting = true;
+      touchStartMs = millis();
+      lastShownCount = 0;
+      // Si veníamos de un blink anterior (por seguridad), lo apagamos
+      blinkEnabled = false;
+    }
+
+    // Si ya estamos en blink, solo gestionar el parpadeo y salir
+    if (blinkEnabled) {
+      uint32_t now = millis();
+      if (now - lastBlinkToggleMs >= BLINK_INTERVAL_MS) {
+        lastBlinkToggleMs = now;
+        blinkState = !blinkState;
+        if (blinkState) showFrozenSprite(); else hideSprite();
+      }
+      return;  // no seguimos con números ni rotación
+    }
+
+    // Aún no parpadeamos: calcular segundos transcurridos
+    uint32_t elapsed = millis() - touchStartMs;
+    int secs = (int)(elapsed / 1000) + 1;   // 0–999ms => 1, 1000–1999 => 2, ...
+    if (secs > secondsToSelect) secs = secondsToSelect;
+
+    // Mostrar el número si cambió (1..6)
+    if (secs != lastShownCount) {
+      drawCenterNumber(secs, newPosition);
+      lastShownCount = secs;
+    }
+
+    // ¿Llegamos al umbral? activamos blink y congelamos la posición actual
+    if (secs >= secondsToSelect && !blinkEnabled) {
+      blinkEnabled = true;
+      freezePositionAtSelect = oldPosition;   // congela la rotación en el ángulo actual
+      blinkState = true;                      // empieza mostrándose
+      lastBlinkToggleMs = millis();
+      showFrozenSprite();                     // mostrar el sprite (estado ON)
+    }
+
+  } else {
+    // Soltó el toque: limpiar estados y restaurar vista
+    if (touchCounting) {
+      touchCounting = false;
+      blinkEnabled = false;
+      // Dejar de mostrar número o pantalla negra y volver a la vista normal
+      M5.Speaker.stop();  // tono OFF
+      restoreRotatedSprite();
+    }
+  }
 }
 
 int mostreCore = 0;
@@ -697,14 +781,15 @@ void loop() {
       AnimateAndWaitForStart();
       gameStarted = true; // Si hizo la animación y entró en lo normal, hay que mandar los mensajes
     }
-
- 
     newPosition = M5Dial.Encoder.read();
-
+  
     newPosition = newPosition + positionAdjustment;
 
     if (newPosition != oldPosition) {
-        updateSprite(newPosition);
+        if (!blinkEnabled && !touchCounting) // hacer que si está en blink o contando toque, no actualice el sprite
+        {
+          updateSprite(newPosition);
+        }
         if (newPosition >= oldPosition)
         {
           changeDirection = 1; // clockwise
@@ -717,8 +802,6 @@ void loop() {
         hasChanged = 1;
         
         value2Send = newPosition;
-
-        
     }
     Check4TouchToPrint(newPosition);
 
