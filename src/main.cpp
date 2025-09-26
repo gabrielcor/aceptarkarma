@@ -346,7 +346,7 @@ void AnimateAndWaitForStart()
 
 void setup() {
     Serial.begin(115200);
-
+    // delay(50);
     WiFi.begin(ssid, password);
     int retries = 0;
     int wifiSsid = 1;
