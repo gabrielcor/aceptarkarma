@@ -22,9 +22,17 @@
 #include  <WiFiUdp.h>
 // #include "testpng.h"
 #include "../include/Bael_seal.h"
+#include "../include/Bael_seal_accept.h"
+#include "../include/Bael_seal_cancel.h"
 #include "../include/Valac_seal.h"
+#include "../include/Valac_seal_accept.h"
+#include "../include/Valac_seal_cancel.h"
 #include "../include/Asmoday_seal.h"
+#include "../include/Asmoday_seal_accept.h"
+#include "../include/Asmoday_seal_cancel.h"
 #include "../include/Belial_seal.h"
+#include "../include/Belial_seal_accept.h"
+#include "../include/Belial_seal_cancel.h"
 #include "../include/Paimon_seal.h"
 #include "../include/Paimon_seal_accept.h"
 #include "../include/Paimon_seal_cancel.h"
@@ -38,7 +46,7 @@ AsyncWebServer server(80);         // to handle the published API
 bool gameStarted = false; // estado del "juego" o del control. 
 bool onAnimation=true; // Indica si tengo que poner la animación
 bool enJuegoFinal = false; // Indica si estoy en el juego final
-bool spriteFinalenUso = 1; // Indica si el sprite final que se está mostrando es el de proceder(1) o cancelar (2)
+int spriteFinalenUso = 1; // Indica si el sprite final que se está mostrando es el de proceder(1) o cancelar (2)
 
 // Animation
 bool startupAnimationPlayed = false;
@@ -56,13 +64,15 @@ int dropY[cols];  // current position of head per column
 
 // end animation
 
-// Array of all bitmaps for convenience. (Total bytes used to store images in PROGMEM = 5024)
+// ARRAY with all bitmaps
+// total 15: 5 devices x 3 states (normal, accept, cancel)
+// memory used: 200x200/8*15 = 75000 bytes aprox
 const int epd_bitmap_allArray_LEN = 15;
 
 const unsigned char* epd_bitmap_allArray[15] = {
 	epd_bitmap_250px_32_Asmoday_seal, epd_bitmap_01_Bael_seal, epd_bitmap_250px_09_Paimon_seal01, epd_bitmap_62_Valac_seal, epd_bitmap_250px_68_Belial_seal,
-  epd_bitmap_250px_32_Asmoday_seal, epd_bitmap_01_Bael_seal, epd_bitmap_250px_09_Paimon_seal01_Accept, epd_bitmap_62_Valac_seal, epd_bitmap_250px_68_Belial_seal,
-  epd_bitmap_250px_32_Asmoday_seal, epd_bitmap_01_Bael_seal, epd_bitmap_250px_09_Paimon_seal01_Cancel, epd_bitmap_62_Valac_seal, epd_bitmap_250px_68_Belial_seal      
+  epd_bitmap_250px_32_Asmoday_seal_Accept, epd_bitmap_01_Bael_seal_Accept, epd_bitmap_250px_09_Paimon_seal01_Accept, epd_bitmap_62_Valac_seal_Accept, epd_bitmap_250px_68_Belial_seal_Accept,
+  epd_bitmap_250px_32_Asmoday_seal_Cancel, epd_bitmap_01_Bael_seal_Cancel, epd_bitmap_250px_09_Paimon_seal01_Cancel, epd_bitmap_62_Valac_seal_Cancel, epd_bitmap_250px_68_Belial_seal_Cancel      
 };
 
 
@@ -226,6 +236,7 @@ void postRule(AsyncWebServerRequest *request, uint8_t *data)
   }
   else if (receivedData.indexOf("finalgame") != -1)
   {
+    gameStarted = true;
     startPositionEndGame = oldPosition; // Guardar la posición de inicio del juego final
     enJuegoFinal = true;
     request->send(200, "application/json", "{\"status\":\"finalgame started\"}");
@@ -449,7 +460,7 @@ void setup() {
         // "反射"; // Hansha - Reflection
         // toDisplay = "は";
     } else if (macAddress == "B0:81:84:97:1B:C4") {
-        deviceId = 2;
+        deviceId = 4;
         positionAdjustment =79;
         toDisplay = "世"; // Otra cosa
         // "こ"
@@ -501,27 +512,50 @@ float calculateDialAngle(int position) {
     }
 }
 
+// Constantes (ajusta HYST si quieres más/menos histéresis)
+const int ROT_STEPS = 64;
+const int HALF = ROT_STEPS / 2;   // 32
+const int SHIFT = 16;             // desplazamiento pedido
+const int HYST = 0;               // 1 paso de histéresis en el borde
+
+// Normaliza a 0..63
+inline int mod64(int x) { 
+  int r = x % ROT_STEPS; 
+  return (r < 0) ? r + ROT_STEPS : r; 
+}
 void updateSprite(int newValor)
 {
   // Si estoy en el juego final, el valor + 90 y el valor -90 se mantiene el sprite que había, si paso de ahí, cambio el sprite y
   if (enJuegoFinal) 
   {
-    Serial.print("newValor: ");
-    Serial.println(newValor);
-    Serial.print("startPositionEndGame: ");
-    Serial.println(startPositionEndGame);
+  
+    // Origen corrido (start - 16)
+    int origin = startPositionEndGame - SHIFT;
 
-    if (newValor > startPositionEndGame + 90 || newValor < startPositionEndGame - 90)
-    {
-      Serial.println("Cambio sprite a cancelar");
-      spriteFinalenUso = 2; // sprite de cancelar
-      LoadSpriteKarma(deviceId+(spriteFinalenUso*5),TFT_PINK);
-    }
-    else
-    {
+    // Posición dentro del ciclo 0..63 tomando el origen corrido
+    int pos = mod64(newValor - origin);
+
+    // Opción: histéresis en el borde 31/32 para evitar “chatter”
+    // Si estás justo en el borde, conserva el sprite actual.
+    bool borde = (pos >= (HALF - HYST) && pos <= (HALF - 1 + HYST));
+
+    if (!borde) {
+      // 0..31 => proceder ; 32..63 => cancelar
+      if (pos < HALF) {
+        if (spriteFinalenUso != 1) {
+          Serial.println("Cambio sprite a proceder");
+          spriteFinalenUso = 1; // sprite de proceder
+          LoadSpriteKarma(deviceId + (spriteFinalenUso * 5), TFT_PINK);
+        }
+      } else {
+        if (spriteFinalenUso != 2) {
+          Serial.println("Cambio sprite a cancelar");
+          spriteFinalenUso = 2; // sprite de cancelar
+          LoadSpriteKarma(deviceId + (spriteFinalenUso * 5), TFT_SKYBLUE);
+        }
+      }
     }
   }
-   
   int angle = calculateDialAngle(newValor);
   sprite.pushRotated(angle);
 }  
