@@ -345,7 +345,7 @@ void AnimateAndWaitForStart()
 }
 
 void setup() {
-    Serial.begin(9600);
+    Serial.begin(115200);
 
     WiFi.begin(ssid, password);
     int retries = 0;
