@@ -44,7 +44,8 @@ AsyncWebServer server(80);         // to handle the published API
 bool gameStarted = false; // estado del "juego" o del control. 
 bool onAnimation=true; // Indica si tengo que poner la animación
 bool enJuegoFinal = false; // Indica si estoy en el juego final
-int spriteFinalenUso = 1; // Indica si el sprite final que se está mostrando es el de proceder(1) o cancelar (2)
+int defaultSpriteFinalEnUso = 1; // Indica el sprite final por defecto que se muestra al iniciar el juego (1=proceder, 2=cancelar)
+int spriteFinalenUso = defaultSpriteFinalEnUso; // Indica si el sprite final que se está mostrando es el de proceder(1) o cancelar (2)
 long oldPosition = -999;
 long newPosition = -999;
 
@@ -160,7 +161,7 @@ void Task1code( void * parameter) {
 }
 
 
-void LoadSpriteKarma(int whichDevice, int whichColor)
+void LoadSpriteKarma(int whichDevice, int spriteEnUso )
 {
 
   // Sprite def
@@ -179,7 +180,11 @@ void LoadSpriteKarma(int whichDevice, int whichColor)
   int sppX = (scrS - sprW) / 2;
   int sppY = (scrS - sprH) / 2;
 
-  int tftColor = whichColor;
+  int tftColor = COLOR_PROCEDER;
+  if (spriteEnUso == 2)
+    tftColor = COLOR_CANCELAR;
+  else if (spriteEnUso == 9)
+    tftColor = COLOR_SELLO;
   // Sprite
 
   const unsigned char *bitmapToShow;
@@ -261,8 +266,8 @@ void postRule(AsyncWebServerRequest *request, uint8_t *data)
     enJuegoFinal = true;
     request->send(200, "application/json", "{\"status\":\"finalgame started\"}");
     Serial.println("Command received: finalgame");
-    // TODO: poner en spriteFinalEnUso el que corresponda a cada sello
-    LoadSpriteKarma(deviceId+(spriteFinalenUso*5),COLOR_PROCEDER);
+    spriteFinalenUso = defaultSpriteFinalEnUso; // Al iniciar el juego final, mostrar el sprite por defecto
+    LoadSpriteKarma(deviceId+(spriteFinalenUso*5),spriteFinalenUso);
    
   }
   else
@@ -398,7 +403,7 @@ void AnimateAndWaitForStart()
     Serial.print("Device Id:");
     Serial.println(deviceId);
 
-    LoadSpriteKarma(deviceId,COLOR_SELLO);
+    LoadSpriteKarma(deviceId,9);
 }
 
 void setup() {
@@ -453,6 +458,10 @@ void setup() {
     // Start OTA
     ArduinoOTA.begin();
     Serial.println("OTA Ready");    
+
+    defaultSpriteFinalEnUso = 1; // Indica el sprite final por defecto que se muestra al iniciar el juego (1=proceder, 2=cancelar)
+
+
     // 
     // Setup the deviceId
     // 
@@ -468,6 +477,7 @@ void setup() {
         toDisplay = "幻"; // Hallucination
         // "幻覚"; // Hallucination
         // "こ"
+        defaultSpriteFinalEnUso = 2; // Indica el sprite final por defecto que se muestra al iniciar el juego (1=proceder, 2=cancelar)
     } else if (macAddress == "34:B7:DA:56:17:54") {
         deviceId = 2;
         positionAdjustment = 79;
@@ -477,13 +487,16 @@ void setup() {
         toDisplay = "奇"; // Miracle
         //  "奇跡"; // Miracle
         // "ち";
+        defaultSpriteFinalEnUso = 2; // Indica el sprite final por defecto que se muestra al iniciar el juego (1=proceder, 2=cancelar)
+
     } else if (macAddress == "34:B7:DA:56:15:EC") {
         deviceId = 4;
         toDisplay ="反"; // Hansha - Reflection
         // "反射"; // Hansha - Reflection
         // toDisplay = "は";
     } else if (macAddress == "B0:81:84:97:1B:C4") {
-        deviceId = 4;
+        deviceId = 3;
+        defaultSpriteFinalEnUso = 2; // Indica el sprite final por defecto que se muestra al iniciar el juego (1=proceder, 2=cancelar)
         positionAdjustment =79;
         toDisplay = "世"; // Otra cosa
         // "こ"
@@ -491,7 +504,8 @@ void setup() {
         // Default case if no match
         deviceId = -1; // Or any other default value
     }
-   
+
+    spriteFinalenUso = defaultSpriteFinalEnUso;
 
     // Print the IP address
     Serial.print("IP Address: ");
@@ -569,16 +583,19 @@ void updateSprite(int newValor)
     if (!borde) {
       // 0..31 => proceder ; 32..63 => cancelar
       if (pos < HALF) {
-        if (spriteFinalenUso != 1) {
-          Serial.println("Cambio sprite a proceder");
-          spriteFinalenUso = 1; // sprite de proceder
-          LoadSpriteKarma(deviceId + (spriteFinalenUso * 5), COLOR_PROCEDER);
+        if (spriteFinalenUso != defaultSpriteFinalEnUso) {
+          Serial.println("Cambio sprite");
+          spriteFinalenUso = defaultSpriteFinalEnUso; // sprite de proceder
+          LoadSpriteKarma(deviceId + (spriteFinalenUso * 5), spriteFinalenUso);
         }
       } else {
-        if (spriteFinalenUso != 2) {
-          Serial.println("Cambio sprite a cancelar");
-          spriteFinalenUso = 2; // sprite de cancelar
-          LoadSpriteKarma(deviceId + (spriteFinalenUso * 5), COLOR_CANCELAR);
+        if (spriteFinalenUso == defaultSpriteFinalEnUso) {
+          Serial.println("Cambio sprite");
+          if (defaultSpriteFinalEnUso == 1) // si el sprite por defecto es el de 1 
+            spriteFinalenUso = 2; // sprite de cancelar
+          else
+            spriteFinalenUso = 1; // sprite de proceder
+          LoadSpriteKarma(deviceId + (spriteFinalenUso * 5), spriteFinalenUso);
         }
       }
     }
@@ -660,10 +677,10 @@ void drawCenterNumber(int n, int newPosition) {
   // tipografía básica, grande y blanca
   // si estoy en Cancelar uso el color COLOR_CANCELAR para la letra
   int colorNum;
-  if (spriteFinalenUso == 2) {
-    colorNum = COLOR_CANCELAR;
-  } else {
+  if (spriteFinalenUso == 1) {
     colorNum = COLOR_PROCEDER;
+  } else {
+    colorNum = COLOR_CANCELAR;
   }
   M5Dial.Lcd.setTextColor(colorNum, TFT_BLACK);
   M5Dial.Lcd.setTextFont(1);      // fuente built-in
