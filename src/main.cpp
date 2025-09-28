@@ -628,6 +628,7 @@ void setup() {
     device.setSoftwareVersion("1.0.0");
     device.setManufacturer("BlackCrow");
     device.setModel("M5Dial");
+    device.enableExtendedUniqueIds();
 
     // optional properties
     sensorShowingAnimation.setCurrentState(showingAnimation);
