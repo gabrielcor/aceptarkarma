@@ -35,6 +35,25 @@
 #include "../include/Paimon_seal_accept.h"
 #include "../include/Paimon_seal_cancel.h"
 
+// Includes for MQTT Discovery
+#include <ArduinoHA.h>
+#define BROKER_ADDR     IPAddress(192,168,70,113)
+#define BROKER_USERNAME     "mqttuser" 
+#define BROKER_PASSWORD     "A1234567#"
+// uint8_t uniqueId[6] = {0, 0, 0, 0, 0, 0}; // to store the Unique Id of the device this is NOT a MAC address
+// uint8_t uniqueId[6] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED}; // for test purposes
+// HADevice device(uniqueId, sizeof(uniqueId));
+HADevice device;
+WiFiClient netClient;                 // <-- WiFi client (replaces EthernetClient)
+HAMqtt mqtt(netClient, device);
+// "myInput" is unique ID of the sensor. You should define you own ID.
+HABinarySensor sensorgameStarted("gameStarted");
+HABinarySensor sensorenJuegoFinal("enJuegoFinal");
+HABinarySensor sensorTouchCounting("touchCounting");
+HABinarySensor sensorBlinkEnabled("blinkEnabled");
+HABinarySensor sensorShowingAnimation("showingAnimation");
+String deviceName;
+
 // Converted with https://rop.nl/truetype2gfx/
 // #include "include/NotoSansDevanagari_Regular20pt7b.h"
 // #include "include/NotoSansDevanagari_Regular5pt7b.h"
@@ -43,6 +62,7 @@
 AsyncWebServer server(80);         // to handle the published API
 bool gameStarted = false; // estado del "juego" o del control. 
 bool onAnimation=true; // Indica si tengo que poner la animación
+bool showingAnimation=false; // Indica si estoy mostrando la animación
 bool enJuegoFinal = false; // Indica si estoy en el juego final
 int defaultSpriteFinalEnUso = 1; // Indica el sprite final por defecto que se muestra al iniciar el juego (1=proceder, 2=cancelar)
 int spriteFinalenUso = defaultSpriteFinalEnUso; // Indica si el sprite final que se está mostrando es el de proceder(1) o cancelar (2)
@@ -202,6 +222,36 @@ void LoadSpriteKarma(int whichDevice, int spriteEnUso )
   oldPosition = -999;
 }
 
+void ChangegameStarted(bool value)
+{
+  gameStarted = value;
+  sensorgameStarted.setState(gameStarted);
+}
+void ChangeenJuegoFinal(bool value)
+{
+  enJuegoFinal = value;
+  sensorenJuegoFinal.setState(enJuegoFinal);
+}
+// add for touchcounting and blinkenabled
+void ChangeTouchCounting(bool value)
+{
+  touchCounting = value;
+  sensorTouchCounting.setState(touchCounting);
+}
+void ChangeBlinkEnabled(bool value)
+{
+  blinkEnabled = value;
+  sensorBlinkEnabled.setState(blinkEnabled);
+}
+void ChangeOnAnimation(bool value)
+{
+  onAnimation = value;
+}
+void ChangeShowingAnimation(bool value)
+{
+  showingAnimation = value;
+  sensorShowingAnimation.setState(showingAnimation);
+}
 
 /// @brief Handle the API call
 /// @param request full request
@@ -225,8 +275,9 @@ void postRule(AsyncWebServerRequest *request, uint8_t *data)
 
   if (receivedData.indexOf("start") != -1)
   {
-    gameStarted = true;
-    onAnimation = true;
+    ChangegameStarted(true);
+    ChangeOnAnimation(true);
+    ChangeenJuegoFinal(false);
     oldPosition = -999;
     newPosition = -999;
 
@@ -235,7 +286,8 @@ void postRule(AsyncWebServerRequest *request, uint8_t *data)
   }
   else if (receivedData.indexOf("shutdown") != -1)
   {
-    gameStarted = false;
+    ChangegameStarted(false);
+    ChangeenJuegoFinal(false);
     M5Dial.Lcd.clearDisplay(TFT_BLACK);
     request->send(200, "application/json", "{\"status\":\"game shutdown\"}");
     Serial.println("Command received: shutdown");
@@ -261,14 +313,14 @@ void postRule(AsyncWebServerRequest *request, uint8_t *data)
   }
   else if (receivedData.indexOf("finalgame") != -1)
   {
-    gameStarted = true;
+    ChangegameStarted(true);
     startPositionEndGame = oldPosition; // Guardar la posición de inicio del juego final
-    enJuegoFinal = true;
+    ChangeenJuegoFinal(true);
     request->send(200, "application/json", "{\"status\":\"finalgame started\"}");
     Serial.println("Command received: finalgame");
     spriteFinalenUso = defaultSpriteFinalEnUso; // Al iniciar el juego final, mostrar el sprite por defecto
     LoadSpriteKarma(deviceId+(spriteFinalenUso*5),spriteFinalenUso);
-   
+  
   }
   else
   {
@@ -303,7 +355,7 @@ void playMatrixRain() {
     while (true) {
       M5Dial.update();  // Read hardware
       ArduinoOTA.handle(); // In case OTA comes and we're showing the animation
-
+      mqtt.loop();       // In case MQTT messages come and we're showing the animation
       // Check dial movement
       long currentDial = M5Dial.Encoder.read();
       if (currentDial != initialDial) {
@@ -393,8 +445,10 @@ void AnimateAndWaitForStart()
     Serial.println("Starting animation...");
     sprite.deleteSprite();        // seal sprite (if any)
     matrixSprite.deleteSprite();  // in case a previous run left it allocated
-
+    ChangeShowingAnimation(true);
     playMatrixRain();
+    ChangeShowingAnimation(false);
+
     Serial.println("End animation...");
     Serial.print("IP Address: ");
     Serial.println(WiFi.localIP());
@@ -428,6 +482,7 @@ void setup() {
     String macAddress = WiFi.macAddress();
     String toDisplay = " ";
 
+    
     // OTA
     // Hostname (optional)
     String hostname = "M5Dial-" + String(deviceId);
@@ -464,27 +519,33 @@ void setup() {
 
     // 
     // Setup the deviceId
+    // and deviceName
     // 
     // 34:B7:DA:54:DE:50
+
     if (macAddress == "34:B7:DA:54:DE:50") {
         deviceId = 0;
         toDisplay = "起";
+        deviceName = "M5Dial-Asmoday";
         // Origin
         // "起源"; // Japanese
         //  "世";
     } else if (macAddress == "34:B7:DA:56:17:90") {
         deviceId = 1;
         toDisplay = "幻"; // Hallucination
+        deviceName = "M5Dial-Bael";
         // "幻覚"; // Hallucination
         // "こ"
         defaultSpriteFinalEnUso = 2; // Indica el sprite final por defecto que se muestra al iniciar el juego (1=proceder, 2=cancelar)
     } else if (macAddress == "34:B7:DA:56:17:54") {
         deviceId = 2;
         positionAdjustment = 79;
+        deviceName = "M5Dial-Paimon";
         toDisplay = "鏡"; // Kagami
     } else if (macAddress == "34:B7:DA:56:12:F8") {
         deviceId = 3;
         toDisplay = "奇"; // Miracle
+        deviceName = "M5Dial-Valac";
         //  "奇跡"; // Miracle
         // "ち";
         defaultSpriteFinalEnUso = 2; // Indica el sprite final por defecto que se muestra al iniciar el juego (1=proceder, 2=cancelar)
@@ -492,6 +553,7 @@ void setup() {
     } else if (macAddress == "34:B7:DA:56:15:EC") {
         deviceId = 4;
         toDisplay ="反"; // Hansha - Reflection
+        deviceName = "M5Dial-Belial";
         // "反射"; // Hansha - Reflection
         // toDisplay = "は";
     } else if (macAddress == "B0:81:84:97:1B:C4") {
@@ -499,6 +561,7 @@ void setup() {
         defaultSpriteFinalEnUso = 2; // Indica el sprite final por defecto que se muestra al iniciar el juego (1=proceder, 2=cancelar)
         positionAdjustment =79;
         toDisplay = "世"; // Otra cosa
+        deviceName = "M5Dial-Valac-2";
         // "こ"
     } else {
         // Default case if no match
@@ -521,7 +584,37 @@ void setup() {
     M5.Speaker.begin();
     M5.Speaker.setVolume(K_M5VOLUME);  // 0-255 (ajusta gusto; 96-160 suele ir bien)
 
+    // setup MQTT
+    // MQTT Discovery
+    // optional device's details
+    uint8_t uniqueId[6];
+    WiFi.macAddress(uniqueId);
+    device.setUniqueId(uniqueId, sizeof(uniqueId));
+    device.setName(deviceName.c_str());
+    device.setSoftwareVersion("1.0.0");
+    device.setManufacturer("BlackCrow");
+    device.setModel("M5Dial");
 
+    // optional properties
+    sensorShowingAnimation.setCurrentState(showingAnimation);
+    sensorShowingAnimation.setName("00 Mostrando Animación");
+
+    sensorgameStarted.setCurrentState(gameStarted);
+    sensorgameStarted.setName("01 Juego Activo");
+
+    sensorenJuegoFinal.setCurrentState(enJuegoFinal);
+    sensorenJuegoFinal.setName("02 En Juego Final");
+
+    // add for touchcounting and blinkenabled
+    sensorTouchCounting.setCurrentState(touchCounting);
+    sensorTouchCounting.setName("03 Touch detectado");
+
+    sensorBlinkEnabled.setCurrentState(blinkEnabled);
+    sensorBlinkEnabled.setName("04 Parpadeo Habilitado");
+
+
+    // sensor.setIcon("mdi:fire");
+    mqtt.begin(BROKER_ADDR, BROKER_USERNAME, BROKER_PASSWORD);
 
     // Start API server
     server.on("/api/command", HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL, [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total)
@@ -732,11 +825,11 @@ void Check4TouchToPrint(int newPosition)
   if (t.isPressed()) {
     // Si recién empieza el toque, inicializa el conteo
     if (!touchCounting) {
-      touchCounting = true;
+      ChangeTouchCounting(true);
       touchStartMs = millis();
       lastShownCount = 0;
       // Si veníamos de un blink anterior (por seguridad), lo apagamos
-      blinkEnabled = false;
+      ChangeTouchCounting(true);
     }
 
     // Si ya estamos en blink, solo gestionar el parpadeo y salir
@@ -763,7 +856,7 @@ void Check4TouchToPrint(int newPosition)
 
     // ¿Llegamos al umbral? activamos blink y congelamos la posición actual
     if (secs >= secondsToSelect && !blinkEnabled) {
-      blinkEnabled = true;
+      ChangeBlinkEnabled(true);
       freezePositionAtSelect = oldPosition;   // congela la rotación en el ángulo actual
       blinkState = true;                      // empieza mostrándose
       lastBlinkToggleMs = millis();
@@ -773,8 +866,8 @@ void Check4TouchToPrint(int newPosition)
   } else {
     // Soltó el toque: limpiar estados y restaurar vista
     if (touchCounting) {
-      touchCounting = false;
-      blinkEnabled = false;
+      ChangeTouchCounting(false);
+      ChangeBlinkEnabled(false);
       // Dejar de mostrar número o pantalla negra y volver a la vista normal
       M5.Speaker.stop();  // tono OFF
       restoreRotatedSprite();
@@ -785,6 +878,7 @@ void Check4TouchToPrint(int newPosition)
 int mostreCore = 0;
 void loop() {
     M5Dial.update();
+    mqtt.loop();
     ArduinoOTA.handle();
     if (mostreCore == 0)
     {
@@ -795,11 +889,11 @@ void loop() {
 
     if (onAnimation)
     {
-      onAnimation=false;
+      ChangeOnAnimation(false);
       sprite.deleteSprite();
-      gameStarted = false;
+      ChangegameStarted(false);
       AnimateAndWaitForStart();
-      gameStarted = true; // Si hizo la animación y entró en lo normal, hay que mandar los mensajes
+      ChangegameStarted(true);
     }
     newPosition = M5Dial.Encoder.read();
   
