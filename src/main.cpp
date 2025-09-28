@@ -47,11 +47,14 @@ HADevice device;
 WiFiClient netClient;                 // <-- WiFi client (replaces EthernetClient)
 HAMqtt mqtt(netClient, device);
 // "myInput" is unique ID of the sensor. You should define you own ID.
+
 HABinarySensor sensorgameStarted("gameStarted");
 HABinarySensor sensorenJuegoFinal("enJuegoFinal");
 HABinarySensor sensorTouchCounting("touchCounting");
 HABinarySensor sensorBlinkEnabled("blinkEnabled");
 HABinarySensor sensorShowingAnimation("showingAnimation");
+HASensor sensorIPAddress("deviceIPAddress");
+
 String deviceName;
 
 // Converted with https://rop.nl/truetype2gfx/
@@ -462,7 +465,87 @@ void AnimateAndWaitForStart()
 
 void setup() {
     Serial.begin(115200);
+
+    // Initialize Wi-Fi in station mode but don't connect yet
+    WiFi.mode(WIFI_STA);
+
+    // Get MAC address before connecting
+    String macAddress = WiFi.macAddress();
+    Serial.print("MAC Address: ");
+    Serial.println(macAddress);
+
+    defaultSpriteFinalEnUso = 1; // Indica el sprite final por defecto que se muestra al iniciar el juego (1=proceder, 2=cancelar)
+    String toDisplay = " ";
+    int deviceIPAddress = 300; // invalid IP address to detect errors
+
+    // 
+    // Setup the deviceId
+    // and deviceName
+    // 
+    // 34:B7:DA:54:DE:50
+
+    if (macAddress == "34:B7:DA:54:DE:50") {
+        deviceId = 0;
+        toDisplay = "起";
+        deviceName = "M5Dial-Asmoday";
+        deviceIPAddress = 51;
+        // Origin
+        // "起源"; // Japanese
+        //  "世";
+    } else if (macAddress == "34:B7:DA:56:17:90") {
+        deviceId = 1;
+        toDisplay = "幻"; // Hallucination
+        deviceName = "M5Dial-Bael";
+        deviceIPAddress = 52;
+        // "幻覚"; // Hallucination
+        // "こ"
+        defaultSpriteFinalEnUso = 2; // Indica el sprite final por defecto que se muestra al iniciar el juego (1=proceder, 2=cancelar)
+    } else if (macAddress == "34:B7:DA:56:17:54") {
+        deviceId = 2;
+        positionAdjustment = 79;
+        deviceName = "M5Dial-Paimon";
+        toDisplay = "鏡"; // Kagami
+        deviceIPAddress = 53;
+    } else if (macAddress == "34:B7:DA:56:12:F8") {
+        deviceId = 3;
+        toDisplay = "奇"; // Miracle
+        deviceName = "M5Dial-Valac";
+        deviceIPAddress = 54;
+        //  "奇跡"; // Miracle
+        // "ち";
+        defaultSpriteFinalEnUso = 2; // Indica el sprite final por defecto que se muestra al iniciar el juego (1=proceder, 2=cancelar)
+
+    } else if (macAddress == "34:B7:DA:56:15:EC") {
+        deviceId = 4;
+        toDisplay ="反"; // Hansha - Reflection
+        deviceName = "M5Dial-Belial";
+        deviceIPAddress = 55;
+        // "反射"; // Hansha - Reflection
+        // toDisplay = "は";
+    } else if (macAddress == "B0:81:84:97:1B:C4") {
+        deviceId = 3;
+        defaultSpriteFinalEnUso = 2; // Indica el sprite final por defecto que se muestra al iniciar el juego (1=proceder, 2=cancelar)
+        positionAdjustment =79;
+        toDisplay = "世"; // Otra cosa
+        deviceName = "M5Dial-Testing";
+        deviceIPAddress = 50;
+        // "こ"
+    } else {
+        // Default case if no match
+        deviceId = -1; // Or any other default value
+    }
+
+    spriteFinalenUso = defaultSpriteFinalEnUso;
+
+
     // delay(50);
+    // Fixed IP configuration
+    IPAddress local_IP(192, 168, 70, deviceIPAddress);
+    IPAddress gateway(192, 168, 70, 1);
+    IPAddress subnet(255, 255, 255, 0);    
+    if (!WiFi.config(local_IP, gateway, subnet)) {
+      Serial.println("Failed to configure Static IP");
+    }    
     WiFi.begin(ssid, password);
     int retries = 0;
     int wifiSsid = 1;
@@ -479,8 +562,6 @@ void setup() {
       retries++;
     }
     Serial.println("Connected to WiFi");
-    String macAddress = WiFi.macAddress();
-    String toDisplay = " ";
 
     
     // OTA
@@ -514,61 +595,6 @@ void setup() {
     ArduinoOTA.begin();
     Serial.println("OTA Ready");    
 
-    defaultSpriteFinalEnUso = 1; // Indica el sprite final por defecto que se muestra al iniciar el juego (1=proceder, 2=cancelar)
-
-
-    // 
-    // Setup the deviceId
-    // and deviceName
-    // 
-    // 34:B7:DA:54:DE:50
-
-    if (macAddress == "34:B7:DA:54:DE:50") {
-        deviceId = 0;
-        toDisplay = "起";
-        deviceName = "M5Dial-Asmoday";
-        // Origin
-        // "起源"; // Japanese
-        //  "世";
-    } else if (macAddress == "34:B7:DA:56:17:90") {
-        deviceId = 1;
-        toDisplay = "幻"; // Hallucination
-        deviceName = "M5Dial-Bael";
-        // "幻覚"; // Hallucination
-        // "こ"
-        defaultSpriteFinalEnUso = 2; // Indica el sprite final por defecto que se muestra al iniciar el juego (1=proceder, 2=cancelar)
-    } else if (macAddress == "34:B7:DA:56:17:54") {
-        deviceId = 2;
-        positionAdjustment = 79;
-        deviceName = "M5Dial-Paimon";
-        toDisplay = "鏡"; // Kagami
-    } else if (macAddress == "34:B7:DA:56:12:F8") {
-        deviceId = 3;
-        toDisplay = "奇"; // Miracle
-        deviceName = "M5Dial-Valac";
-        //  "奇跡"; // Miracle
-        // "ち";
-        defaultSpriteFinalEnUso = 2; // Indica el sprite final por defecto que se muestra al iniciar el juego (1=proceder, 2=cancelar)
-
-    } else if (macAddress == "34:B7:DA:56:15:EC") {
-        deviceId = 4;
-        toDisplay ="反"; // Hansha - Reflection
-        deviceName = "M5Dial-Belial";
-        // "反射"; // Hansha - Reflection
-        // toDisplay = "は";
-    } else if (macAddress == "B0:81:84:97:1B:C4") {
-        deviceId = 3;
-        defaultSpriteFinalEnUso = 2; // Indica el sprite final por defecto que se muestra al iniciar el juego (1=proceder, 2=cancelar)
-        positionAdjustment =79;
-        toDisplay = "世"; // Otra cosa
-        deviceName = "M5Dial-Valac-2";
-        // "こ"
-    } else {
-        // Default case if no match
-        deviceId = -1; // Or any other default value
-    }
-
-    spriteFinalenUso = defaultSpriteFinalEnUso;
 
     // Print the IP address
     Serial.print("IP Address: ");
@@ -587,9 +613,17 @@ void setup() {
     // setup MQTT
     // MQTT Discovery
     // optional device's details
-    uint8_t uniqueId[6];
-    WiFi.macAddress(uniqueId);
-    device.setUniqueId(uniqueId, sizeof(uniqueId));
+    // uint8_t uniqueId[6];
+    // WiFi.macAddress(uniqueId);
+    // I want to set the deviceName as the uniquieId
+
+    // change the deviceName to be a byte array
+    uint8_t* deviceNameBytes;
+    deviceNameBytes = new uint8_t[deviceName.length()];
+    memcpy(deviceNameBytes, deviceName.c_str(), deviceName.length());
+    device.setUniqueId(deviceNameBytes, deviceName.length() );
+
+    // device.setUniqueId(uniqueId, sizeof(uniqueId));
     device.setName(deviceName.c_str());
     device.setSoftwareVersion("1.0.0");
     device.setManufacturer("BlackCrow");
@@ -598,7 +632,7 @@ void setup() {
     // optional properties
     sensorShowingAnimation.setCurrentState(showingAnimation);
     sensorShowingAnimation.setName("00 Mostrando Animación");
-
+  
     sensorgameStarted.setCurrentState(gameStarted);
     sensorgameStarted.setName("01 Juego Activo");
 
@@ -612,7 +646,10 @@ void setup() {
     sensorBlinkEnabled.setCurrentState(blinkEnabled);
     sensorBlinkEnabled.setName("04 Parpadeo Habilitado");
 
+    // sensorIPAddress.setValue("WARNING"); IMPORTANTE: aunque lo inicialicemos aquí no se ve, hay que hacerlo después.
 
+    sensorIPAddress.setName("05 IP Address");
+    // WiFi.localIP().toString().c_str()
     // sensor.setIcon("mdi:fire");
     mqtt.begin(BROKER_ADDR, BROKER_USERNAME, BROKER_PASSWORD);
 
@@ -885,6 +922,10 @@ void loop() {
       Serial.print("loop() running on core ");
       Serial.println(xPortGetCoreID());
       mostreCore = 1;
+      // Actualizar el sensor de IP Address
+      // Si no lo hacemos en el loop, no se actualiza en el setup no sirve
+      sensorIPAddress.setValue(WiFi.localIP().toString().c_str());
+
     }
 
     if (onAnimation)
