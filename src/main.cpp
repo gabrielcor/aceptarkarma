@@ -118,10 +118,14 @@ const unsigned char* epd_bitmap_allArray[15] = {
 };
 
 
+// Para producción, solamente que intente conctarse a producción.
 const char *ssid ="blackcrow_prod01";
 const char *password = "e2aVwqCtfc5EsgGE852E";
-const char *ssid2 = "blackcrow_01";
-const char *password2 = "8001017170";
+const char *ssid2 = "blackcrow_prod01";
+const char *password2 = "e2aVwqCtfc5EsgGE852E";
+
+// const char *ssid2 = "blackcrow_01";
+// const char *password2 = "8001017170";
 int deviceId;
 
 // const char *url2SendResult = "http://192.168.70.172:8080";
