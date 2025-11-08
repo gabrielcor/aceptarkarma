@@ -77,7 +77,10 @@ static constexpr int TFT_MYORANGE      = 0xFA00;
 const int COLOR_PROCEDER = TFT_MYORANGE;
 const int COLOR_CANCELAR = TFT_SKYBLUE;
 const int COLOR_SELLO = TFT_PURPLE;
+const int COLOR_VASSAGO = TFT_GREEN;
 const int K_M5VOLUME = 255; // volumen del buzzer 0-255
+
+int enVassagoMode = 0; // 0-no, 1-sí
 
 static constexpr int TFT_PAIMON = 0x9EFF;  // RGB(148,241,255)
 static constexpr int TFT_ASMODAY = TFT_ORANGE; // RGB(255,255,106)
@@ -197,6 +200,9 @@ void Task1code( void * parameter) {
 int GetColorSello(int deviceId)
 {
   int tftColor = COLOR_SELLO;
+  if (enVassagoMode == 1)
+    return COLOR_VASSAGO;
+
   switch (deviceId)
   {
   case 0: // Asmoday
@@ -351,6 +357,21 @@ void postRule(AsyncWebServerRequest *request, uint8_t *data)
     esp_restart();
     return; // technically not needed, but explicit
   }
+  else if (receivedData.indexOf("vassagomodeon") != -1)
+  {
+    enVassagoMode = 1;
+    LoadSpriteKarma(deviceId,9); // show the seal in vassago mode
+    request->send(200, "application/json", "{\"status\":\"vassago mode enabled\"}");
+    Serial.println("Command received: vassagomodeon");
+  }
+  else if (receivedData.indexOf("vassagomodeoff") != -1)
+  {
+    enVassagoMode = 0;
+    LoadSpriteKarma(deviceId,9); // show the default sprite
+    request->send(200, "application/json", "{\"status\":\"vassago mode disabled\"}");
+    Serial.println("Command received: vassagomodeoff");
+  }
+
   else if (receivedData.indexOf("finalgame") != -1)
   {
     ChangegameStarted(true);
