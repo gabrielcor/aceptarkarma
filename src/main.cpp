@@ -79,6 +79,12 @@ const int COLOR_CANCELAR = TFT_SKYBLUE;
 const int COLOR_SELLO = TFT_PURPLE;
 const int K_M5VOLUME = 255; // volumen del buzzer 0-255
 
+static constexpr int TFT_PAIMON = 0x9EFF;  // RGB(148,241,255)
+static constexpr int TFT_ASMODAY = TFT_ORANGE; // RGB(255,255,106)
+static constexpr int TFT_BAEL = 0xFEC9;    // RGB(255,255,220)
+static constexpr int TFT_BELIAL = TFT_RED;  // RGB(255,215,136)
+static constexpr int TFT_VALAC = 0xF99F;   // RGB(255,131,255)
+
 // --- Contador táctil en juego final ---
 bool touchCounting = false;
 uint32_t touchStartMs = 0;
@@ -116,6 +122,7 @@ const unsigned char* epd_bitmap_allArray[15] = {
   epd_bitmap_250px_32_Asmoday_seal_Accept, epd_bitmap_01_Bael_seal_Accept, epd_bitmap_250px_09_Paimon_seal01_Accept, epd_bitmap_62_Valac_seal_Accept, epd_bitmap_250px_68_Belial_seal_Accept,
   epd_bitmap_250px_32_Asmoday_seal_Cancel, epd_bitmap_01_Bael_seal_Cancel, epd_bitmap_250px_09_Paimon_seal01_Cancel, epd_bitmap_62_Valac_seal_Cancel, epd_bitmap_250px_68_Belial_seal_Cancel      
 };
+
 
 
 // Para producción, solamente que intente conctarse a producción.
@@ -187,6 +194,32 @@ void Task1code( void * parameter) {
   
 }
 
+int GetColorSello(int deviceId)
+{
+  int tftColor = COLOR_SELLO;
+  switch (deviceId)
+  {
+  case 0: // Asmoday
+    tftColor = TFT_ASMODAY;
+    break;
+  case 1: // Bael
+    tftColor = TFT_BAEL;
+    break;
+  case 2: // Paimon
+    tftColor = TFT_PAIMON;
+    break;
+  case 3: // Valac
+    tftColor = TFT_VALAC;
+    break;
+  case 4: // Belial
+    tftColor = TFT_BELIAL;
+    break;  
+  default:
+    tftColor = COLOR_SELLO;
+    break;
+  }
+  return tftColor;
+}
 
 void LoadSpriteKarma(int whichDevice, int spriteEnUso )
 {
@@ -211,7 +244,7 @@ void LoadSpriteKarma(int whichDevice, int spriteEnUso )
   if (spriteEnUso == 2)
     tftColor = COLOR_CANCELAR;
   else if (spriteEnUso == 9)
-    tftColor = COLOR_SELLO;
+    tftColor = GetColorSello(deviceId);
   // Sprite
 
   const unsigned char *bitmapToShow;
@@ -345,7 +378,7 @@ void playMatrixRain() {
   // matrixSprite.setFreeFont(&NotoSansDevanagari_Regular5pt7b); // Not using this one because converters did not convert all the characters
   matrixSprite.setTextSize(2);
   matrixSprite.setTextFont(1);  // basic built-in font
-  matrixSprite.setTextColor(COLOR_SELLO, TFT_BLACK);
+  matrixSprite.setTextColor(GetColorSello(deviceId), TFT_BLACK);
 
   
   // matrixSprite.drawString("नमस्ते", 10, 10);
@@ -489,40 +522,40 @@ void setup() {
     // 34:B7:DA:54:DE:50
 
     if (macAddress == "34:B7:DA:54:DE:50") {
-        deviceId = 0;
+        deviceId = 1; // old 0
         toDisplay = "起";
-        deviceName = "M5Dial-Asmoday";
+        deviceName = "M5Dial-Bael";
         deviceIPAddress = 51;
         // Origin
         // "起源"; // Japanese
         //  "世";
     } else if (macAddress == "34:B7:DA:56:17:90") {
-        deviceId = 1;
+        deviceId = 2; // old 1
         toDisplay = "幻"; // Hallucination
-        deviceName = "M5Dial-Bael";
+        deviceName = "M5Dial-Paimon";
         deviceIPAddress = 52;
         // "幻覚"; // Hallucination
         // "こ"
         defaultSpriteFinalEnUso = 2; // Indica el sprite final por defecto que se muestra al iniciar el juego (1=proceder, 2=cancelar)
     } else if (macAddress == "34:B7:DA:56:17:54") {
-        deviceId = 2;
+        deviceId = 0; // old 2
         positionAdjustment = 79;
-        deviceName = "M5Dial-Paimon";
+        deviceName = "M5Dial-Asmoday";
         toDisplay = "鏡"; // Kagami
         deviceIPAddress = 53;
     } else if (macAddress == "34:B7:DA:56:12:F8") {
-        deviceId = 3;
+        deviceId = 4; // old 3
         toDisplay = "奇"; // Miracle
-        deviceName = "M5Dial-Valac";
+        deviceName = "M5Dial-Belial";
         deviceIPAddress = 54;
         //  "奇跡"; // Miracle
         // "ち";
         defaultSpriteFinalEnUso = 2; // Indica el sprite final por defecto que se muestra al iniciar el juego (1=proceder, 2=cancelar)
 
     } else if (macAddress == "34:B7:DA:56:15:EC") {
-        deviceId = 4;
+        deviceId = 3; // old 4
         toDisplay ="反"; // Hansha - Reflection
-        deviceName = "M5Dial-Belial";
+        deviceName = "M5Dial-Valac";
         deviceIPAddress = 55;
         // "反射"; // Hansha - Reflection
         // toDisplay = "は";
