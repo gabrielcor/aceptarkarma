@@ -78,6 +78,8 @@ const int COLOR_PROCEDER = TFT_MYORANGE;
 const int COLOR_CANCELAR = TFT_SKYBLUE;
 const int COLOR_SELLO = TFT_PURPLE;
 const int COLOR_VASSAGO = TFT_GREEN;
+const int COLOR_APAGADO = TFT_BLACK;
+
 const int K_M5VOLUME = 255; // volumen del buzzer 0-255
 
 int enVassagoMode = 0; // 0-no, 1-sí
@@ -202,6 +204,8 @@ int GetColorSello(int deviceId)
   int tftColor = COLOR_SELLO;
   if (enVassagoMode == 1)
     return COLOR_VASSAGO;
+  if (enVassagoMode == 2)
+    return COLOR_APAGADO;
 
   switch (deviceId)
   {
@@ -356,6 +360,13 @@ void postRule(AsyncWebServerRequest *request, uint8_t *data)
     delay(100); // allow time for response to be sent
     esp_restart();
     return; // technically not needed, but explicit
+  }
+  else if (receivedData.indexOf("vassagomodesd") != -1)
+  {
+    enVassagoMode = 2; // modo de apagado
+    LoadSpriteKarma(deviceId,9); // show the seal in vassago mode
+    request->send(200, "application/json", "{\"status\":\"vassago mode shutdown enabled\"}");
+    Serial.println("Command received: vassagomodeshutdown");
   }
   else if (receivedData.indexOf("vassagomodeon") != -1)
   {
