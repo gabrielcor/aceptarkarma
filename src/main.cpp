@@ -234,6 +234,15 @@ int GetColorSello(int deviceId)
 void LoadSpriteKarma(int whichDevice, int spriteEnUso )
 {
 
+  if (enVassagoMode == 2)
+  {
+    M5Dial.Lcd.setBrightness(0);
+    M5Dial.Lcd.fillScreen(TFT_BLACK);
+    return;
+  }
+  M5Dial.Lcd.setBrightness(255);
+  
+
   // Sprite def
   // screen size
   int scrS = 240; // M5Dial
@@ -609,11 +618,17 @@ void setup() {
 
     // delay(50);
     // Fixed IP configuration
-    IPAddress local_IP(192, 168, 70, deviceIPAddress);
-    IPAddress gateway(192, 168, 70, 1);
-    IPAddress subnet(255, 255, 255, 0);    
-    if (!WiFi.config(local_IP, gateway, subnet)) {
-      Serial.println("Failed to configure Static IP");
+    if (macAddress == "B0:81:84:97:1B:C4")
+    {
+    }
+    else
+    {
+      IPAddress local_IP(192, 168, 70, deviceIPAddress);
+      IPAddress gateway(192, 168, 70, 1);
+      IPAddress subnet(255, 255, 255, 0);    
+      if (!WiFi.config(local_IP, gateway, subnet)) {
+        Serial.println("Failed to configure Static IP");
+      }    
     }    
     WiFi.begin(ssid, password);
     int retries = 0;

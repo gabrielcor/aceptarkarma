@@ -1,0 +1,1 @@
+pio run -e m5dial -t upload --upload-port COM8
