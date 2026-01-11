@@ -633,7 +633,7 @@ void setup() {
     WiFi.begin(ssid, password);
     int retries = 0;
     int wifiSsid = 1;
-    while (WiFi.status() != WL_CONNECTED)
+    while ((WiFi.status() != WL_CONNECTED) && (retries < 10))
     {
       delay(1000);
       if (retries == 5)
@@ -644,6 +644,13 @@ void setup() {
       Serial.print("Connecting to WiFi ");
       Serial.println(WiFi.SSID());
       retries++;
+    }
+    // Si no se conectó finalmente, reiniciar el ESP
+    if (WiFi.status() != WL_CONNECTED)
+    {
+      Serial.println("Failed to connect to WiFi");
+      delay(500);
+      esp_restart();
     }
     Serial.println("Connected to WiFi");
 
