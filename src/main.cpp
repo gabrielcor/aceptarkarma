@@ -154,7 +154,7 @@ long startPositionEndGame = -999;
 int positionAdjustment = 0; // cuanto se ajusta lo que el dial tiene como valor hacia el envío para que coincida con la posición unity
 int hasChanged = 0;
 long value2Send = 0;
-long prevValue = -999;
+long prevValue = 0;
 int changeDirection = -1; // 0-clockwise, 1-counterclockwise
 
 lgfx::LGFX_Sprite sprite(&M5Dial.Lcd);
@@ -580,7 +580,7 @@ void setup() {
         defaultSpriteFinalEnUso = 2; // Indica el sprite final por defecto que se muestra al iniciar el juego (1=proceder, 2=cancelar)
     } else if (macAddress == "34:B7:DA:56:17:54") {
         deviceId = 0; // old 2
-        positionAdjustment = 79;
+        positionAdjustment = 0;
         deviceName = "M5Dial-Asmoday";
         toDisplay = "鏡"; // Kagami
         deviceIPAddress = 53;
@@ -603,7 +603,7 @@ void setup() {
     } else if (macAddress == "B0:81:84:97:1B:C4") {
         deviceId = 3;
         defaultSpriteFinalEnUso = 2; // Indica el sprite final por defecto que se muestra al iniciar el juego (1=proceder, 2=cancelar)
-        positionAdjustment =79;
+        positionAdjustment =0;
         toDisplay = "世"; // Otra cosa
         deviceName = "M5Dial-Testing";
         deviceIPAddress = 50;
