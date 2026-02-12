@@ -34,6 +34,7 @@
 #include "../include/Paimon_seal.h"
 #include "../include/Paimon_seal_accept.h"
 #include "../include/Paimon_seal_cancel.h"
+#include "../include/Bael_seal_scalevalue.h"
 
 // Includes for MQTT Discovery
 #include <ArduinoHA.h>
