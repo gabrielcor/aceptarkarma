@@ -1,0 +1,3 @@
+Los 00-son los archivos con solamente las letras en fondo transparente.
+Con ellos se generan los 91- que son solamente las letras.
+Luego los 90 se generan pegando las letras sobre el background_4_90s.

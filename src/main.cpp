@@ -34,7 +34,9 @@
 #include "../include/Paimon_seal.h"
 #include "../include/Paimon_seal_accept.h"
 #include "../include/Paimon_seal_cancel.h"
-#include "../include/Bael_seal_scalevalue.h"
+#include "../include/puzlehint/90_scalevalue_absolute.h"
+#include "../include/puzlehint/91_scalevalue_absolute.h"
+
 
 // Includes for MQTT Discovery
 #include <ArduinoHA.h>
@@ -121,13 +123,16 @@ int dropY[cols];  // current position of head per column
 // ARRAY with all bitmaps
 // total 15: 5 devices x 3 states (normal, accept, cancel)
 // memory used: 200x200/8*15 = 75000 bytes aprox
-const int epd_bitmap_allArray_LEN = 15;
+// 2026-02 agrego 5 más para la pista del puzle líquidos.
 
-const unsigned char* epd_bitmap_allArray[15] = {
+const unsigned char* epd_bitmap_allArray[25] = {
 	epd_bitmap_250px_32_Asmoday_seal, epd_bitmap_01_Bael_seal, epd_bitmap_250px_09_Paimon_seal01, epd_bitmap_62_Valac_seal, epd_bitmap_250px_68_Belial_seal,
   epd_bitmap_250px_32_Asmoday_seal_Accept, epd_bitmap_01_Bael_seal_Accept, epd_bitmap_250px_09_Paimon_seal01_Accept, epd_bitmap_62_Valac_seal_Accept, epd_bitmap_250px_68_Belial_seal_Accept,
-  epd_bitmap_250px_32_Asmoday_seal_Cancel, epd_bitmap_01_Bael_seal_Cancel, epd_bitmap_250px_09_Paimon_seal01_Cancel, epd_bitmap_62_Valac_seal_Cancel, epd_bitmap_250px_68_Belial_seal_Cancel      
-};
+  epd_bitmap_250px_32_Asmoday_seal_Cancel, epd_bitmap_01_Bael_seal_Cancel, epd_bitmap_250px_09_Paimon_seal01_Cancel, epd_bitmap_62_Valac_seal_Cancel, epd_bitmap_250px_68_Belial_seal_Cancel,
+   epd_bitmap_90_scalevalue_absolute,  epd_bitmap_90_scalevalue_absolute,  epd_bitmap_90_scalevalue_absolute,  epd_bitmap_90_scalevalue_absolute,  epd_bitmap_90_scalevalue_absolute,
+   epd_bitmap_91_scalevalue_absolute,  epd_bitmap_91_scalevalue_absolute,  epd_bitmap_91_scalevalue_absolute,  epd_bitmap_91_scalevalue_absolute,  epd_bitmap_91_scalevalue_absolute
+
+  };
 
 
 
@@ -392,7 +397,20 @@ void postRule(AsyncWebServerRequest *request, uint8_t *data)
     request->send(200, "application/json", "{\"status\":\"vassago mode disabled\"}");
     Serial.println("Command received: vassagomodeoff");
   }
-
+  else if (receivedData.indexOf("hintliquidpuzle_a") != -1)
+  {
+    enVassagoMode = 1;
+    LoadSpriteKarma(deviceId+15,9); // show the hint sprite for the liquid puzzle in vassago mode
+    request->send(200, "application/json", "{\"status\":\"hint mode enabled\"}");
+    Serial.println("Command received: hintliquidpuzle_a");
+  }
+  else if (receivedData.indexOf("hintliquidpuzle_b") != -1)
+  {
+    enVassagoMode = 1;
+    LoadSpriteKarma(deviceId+20,9); // show the hint sprite for the liquid puzzle in vassago mode
+    request->send(200, "application/json", "{\"status\":\"hint mode enabled\"}");
+    Serial.println("Command received: hintliquidpuzle_b");
+  }
   else if (receivedData.indexOf("finalgame") != -1)
   {
     ChangegameStarted(true);
