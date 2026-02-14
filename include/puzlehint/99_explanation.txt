@@ -3,7 +3,7 @@ Con ellos se generan los 90 que son solamente las letras.
 Luego los 91 se generan pegando las letras sobre el background_4_91s.
 
 Los .h que se generan son:
-- los 95 para las puras letras
-- los 96 para las letras sobre el pentagrama
+- 90_all_pngs para los 90 (puras letras)
+- 91_all_pnges para los 91 (letras sobre el pentagrama)
 
 https://javl.github.io/image2cpp/s

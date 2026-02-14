@@ -34,8 +34,8 @@
 #include "../include/Paimon_seal.h"
 #include "../include/Paimon_seal_accept.h"
 #include "../include/Paimon_seal_cancel.h"
-#include "../include/puzlehint/90_scalevalue_absolute.h"
-#include "../include/puzlehint/91_scalevalue_absolute.h"
+#include "../include/puzlehint/90_all_pngs.h"
+#include "../include/puzlehint/91_all_pngs.h"
 
 
 // Includes for MQTT Discovery
@@ -129,8 +129,8 @@ const unsigned char* epd_bitmap_allArray[25] = {
 	epd_bitmap_250px_32_Asmoday_seal, epd_bitmap_01_Bael_seal, epd_bitmap_250px_09_Paimon_seal01, epd_bitmap_62_Valac_seal, epd_bitmap_250px_68_Belial_seal,
   epd_bitmap_250px_32_Asmoday_seal_Accept, epd_bitmap_01_Bael_seal_Accept, epd_bitmap_250px_09_Paimon_seal01_Accept, epd_bitmap_62_Valac_seal_Accept, epd_bitmap_250px_68_Belial_seal_Accept,
   epd_bitmap_250px_32_Asmoday_seal_Cancel, epd_bitmap_01_Bael_seal_Cancel, epd_bitmap_250px_09_Paimon_seal01_Cancel, epd_bitmap_62_Valac_seal_Cancel, epd_bitmap_250px_68_Belial_seal_Cancel,
-   epd_bitmap_90_scalevalue_absolute,  epd_bitmap_90_scalevalue_absolute,  epd_bitmap_90_scalevalue_absolute,  epd_bitmap_90_scalevalue_absolute,  epd_bitmap_90_scalevalue_absolute,
-   epd_bitmap_91_scalevalue_absolute,  epd_bitmap_91_scalevalue_absolute,  epd_bitmap_91_scalevalue_absolute,  epd_bitmap_91_scalevalue_absolute,  epd_bitmap_91_scalevalue_absolute
+   epd_bitmap_90_crystalcalibrator_1mc, epd_bitmap_90_frequency_1, epd_bitmap_90_modeselector_afc, epd_bitmap_90_scalevalue_absolute, epd_bitmap_90_waveform_sine,
+   epd_bitmap_91_crystalcalibrator_1mc, epd_bitmap_91_frequency_1, epd_bitmap_91_modeselector_afc, epd_bitmap_91_scalevalue_absolute, epd_bitmap_91_waveform_sine
 
   };
 
@@ -620,7 +620,7 @@ void setup() {
         // "反射"; // Hansha - Reflection
         // toDisplay = "は";
     } else if (macAddress == "B0:81:84:97:1B:C4") {
-        deviceId = 3;
+        deviceId = 1;
         defaultSpriteFinalEnUso = 2; // Indica el sprite final por defecto que se muestra al iniciar el juego (1=proceder, 2=cancelar)
         positionAdjustment =0;
         toDisplay = "世"; // Otra cosa
