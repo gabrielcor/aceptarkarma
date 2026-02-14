@@ -1,3 +1,9 @@
 Los 00-son los archivos con solamente las letras en fondo transparente.
-Con ellos se generan los 91- que son solamente las letras.
-Luego los 90 se generan pegando las letras sobre el background_4_90s.
+Con ellos se generan los 90 que son solamente las letras.
+Luego los 91 se generan pegando las letras sobre el background_4_91s.
+
+Los .h que se generan son:
+- los 95 para las puras letras
+- los 96 para las letras sobre el pentagrama
+
+https://javl.github.io/image2cpp/s
