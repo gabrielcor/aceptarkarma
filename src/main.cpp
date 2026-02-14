@@ -142,6 +142,17 @@ const char *password = "e2aVwqCtfc5EsgGE852E";
 const char *ssid2 = "blackcrow_prod01";
 const char *password2 = "e2aVwqCtfc5EsgGE852E";
 
+int activeWifiCredential = 1;
+int wifiReconnectAttempts = 0;
+uint32_t lastWifiReconnectAttemptMs = 0;
+const uint32_t WIFI_RECONNECT_INTERVAL_MS = 5000;
+
+bool lastTouchPressed = false;
+int emergencyTapCount = 0;
+uint32_t lastEmergencyTapMs = 0;
+const uint32_t TAP_DEBOUNCE_MS = 180;
+const uint32_t TAP_WINDOW_MS = 15000;
+
 // const char *ssid2 = "blackcrow_01";
 // const char *password2 = "8001017170";
 int deviceId;
@@ -560,6 +571,65 @@ void AnimateAndWaitForStart()
     LoadSpriteKarma(deviceId,9);
 }
 
+void EnsureWiFiConnected()
+{
+    if (WiFi.status() == WL_CONNECTED)
+    {
+      wifiReconnectAttempts = 0;
+      return;
+    }
+
+    uint32_t now = millis();
+    if (now - lastWifiReconnectAttemptMs < WIFI_RECONNECT_INTERVAL_MS)
+      return;
+
+    lastWifiReconnectAttemptMs = now;
+    wifiReconnectAttempts++;
+
+    if (wifiReconnectAttempts % 6 == 0)
+      activeWifiCredential = (activeWifiCredential == 1) ? 2 : 1;
+
+    const char *targetSsid = (activeWifiCredential == 1) ? ssid : ssid2;
+    const char *targetPassword = (activeWifiCredential == 1) ? password : password2;
+
+    Serial.printf("WiFi disconnected. Reconnect attempt %d to SSID: %s\n", wifiReconnectAttempts, targetSsid);
+    WiFi.disconnect();
+    WiFi.begin(targetSsid, targetPassword);
+}
+
+void HandleEmergencyRestartByTap()
+{
+  auto touch = M5Dial.Touch.getDetail();
+  bool isPressed = touch.isPressed();
+  uint32_t now = millis();
+
+  if (isPressed && !lastTouchPressed)
+  {
+    if (now - lastEmergencyTapMs < TAP_DEBOUNCE_MS)
+    {
+      lastTouchPressed = isPressed;
+      return;
+    }
+
+    if ((lastEmergencyTapMs == 0) || (now - lastEmergencyTapMs > TAP_WINDOW_MS))
+      emergencyTapCount = 0;
+
+    emergencyTapCount++;
+    lastEmergencyTapMs = now;
+    Serial.printf("Emergency tap count: %d/10\n", emergencyTapCount);
+
+    if (emergencyTapCount >= 10)
+    {
+      Serial.println("Emergency restart requested by 10 taps.");
+      delay(100);
+      esp_restart();
+      return;
+    }
+  }
+
+  lastTouchPressed = isPressed;
+}
+
 void setup() {
     Serial.begin(115200);
 
@@ -651,14 +721,14 @@ void setup() {
     }    
     WiFi.begin(ssid, password);
     int retries = 0;
-    int wifiSsid = 1;
+    activeWifiCredential = 1;
     while ((WiFi.status() != WL_CONNECTED) && (retries < 10))
     {
       delay(1000);
       if (retries == 5)
       {
         WiFi.begin(ssid2,password2);
-        wifiSsid = 2;
+        activeWifiCredential = 2;
       }
       Serial.print("Connecting to WiFi ");
       Serial.println(WiFi.SSID());
@@ -1026,6 +1096,8 @@ void Check4TouchToPrint(int newPosition)
 int mostreCore = 0;
 void loop() {
     M5Dial.update();
+  EnsureWiFiConnected();
+  HandleEmergencyRestartByTap();
     mqtt.loop();
     ArduinoOTA.handle();
     if (mostreCore == 0)
