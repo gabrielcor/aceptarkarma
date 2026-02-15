@@ -19,6 +19,7 @@
 #include <WiFi.h>
 #include <ESPAsyncWebServer.h>
 #include  <WiFiUdp.h>
+#include <ctype.h>
 #include "../include/Bael_seal.h"
 #include "../include/Bael_seal_accept.h"
 #include "../include/Bael_seal_cancel.h"
@@ -175,6 +176,136 @@ long prevValue = 0;
 int changeDirection = -1; // 0-clockwise, 1-counterclockwise
 
 lgfx::LGFX_Sprite sprite(&M5Dial.Lcd);
+
+static constexpr int BITMAP_WIDTH = 200;
+static constexpr int BITMAP_HEIGHT = 200;
+static constexpr size_t MANUAL_BITMAP_BYTES = (BITMAP_WIDTH * BITMAP_HEIGHT) / 8;
+uint8_t manualBitmapBuffer[MANUAL_BITMAP_BYTES];
+
+int hexDigitToInt(char c)
+{
+  if (c >= '0' && c <= '9') return c - '0';
+  if (c >= 'a' && c <= 'f') return 10 + (c - 'a');
+  if (c >= 'A' && c <= 'F') return 10 + (c - 'A');
+  return -1;
+}
+
+size_t parseHexBitmapBytes(const String &imageData, uint8_t *output, size_t maxBytes)
+{
+  size_t outCount = 0;
+  int i = 0;
+  int n = imageData.length();
+
+  while (i < n && outCount < maxBytes)
+  {
+    if ((imageData[i] == '0') && (i + 1 < n) && (imageData[i + 1] == 'x' || imageData[i + 1] == 'X'))
+    {
+      i += 2;
+
+      int value = 0;
+      int digitCount = 0;
+      while (i < n)
+      {
+        int d = hexDigitToInt(imageData[i]);
+        if (d < 0) break;
+        if (digitCount < 2)
+          value = (value << 4) | d;
+        digitCount++;
+        i++;
+      }
+
+      if (digitCount > 0)
+        output[outCount++] = (uint8_t)(value & 0xFF);
+    }
+    else
+    {
+      i++;
+    }
+  }
+
+  return outCount;
+}
+
+size_t parseHexBitmapBytesFromIndex(const String &imageData, int startIndex, uint8_t *output, size_t maxBytes)
+{
+  size_t outCount = 0;
+  int i = startIndex;
+  int n = imageData.length();
+
+  while (i < n && outCount < maxBytes)
+  {
+    if ((imageData[i] == '0') && (i + 1 < n) && (imageData[i + 1] == 'x' || imageData[i + 1] == 'X'))
+    {
+      i += 2;
+
+      int value = 0;
+      int digitCount = 0;
+      while (i < n)
+      {
+        int d = hexDigitToInt(imageData[i]);
+        if (d < 0) break;
+        if (digitCount < 2)
+          value = (value << 4) | d;
+        digitCount++;
+        i++;
+      }
+
+      if (digitCount > 0)
+        output[outCount++] = (uint8_t)(value & 0xFF);
+    }
+    else
+    {
+      i++;
+    }
+  }
+
+  return outCount;
+}
+
+bool extractJsonStringField(const String &json, const char *fieldName, String &outValue)
+{
+  String key = String("\"") + fieldName + "\"";
+  int keyPos = json.indexOf(key);
+  if (keyPos < 0) return false;
+
+  int colonPos = json.indexOf(':', keyPos + key.length());
+  if (colonPos < 0) return false;
+
+  int valueStart = colonPos + 1;
+  while (valueStart < json.length() && isspace((unsigned char)json[valueStart]))
+    valueStart++;
+
+  if (valueStart >= json.length() || json[valueStart] != '"')
+    return false;
+
+  valueStart++; // skip opening quote
+  outValue = "";
+  bool escaping = false;
+
+  for (int i = valueStart; i < json.length(); i++)
+  {
+    char c = json[i];
+    if (escaping)
+    {
+      outValue += c;
+      escaping = false;
+      continue;
+    }
+
+    if (c == '\\')
+    {
+      escaping = true;
+      continue;
+    }
+
+    if (c == '"')
+      return true;
+
+    outValue += c;
+  }
+
+  return false;
+}
  
 void sendEncoderToApi(int device, int step_mode, int step_size, int transition_time)
 {
@@ -248,7 +379,7 @@ int GetColorSello(int deviceId)
   return tftColor;
 }
 
-void LoadSpriteKarma(int whichDevice, int spriteEnUso )
+void LoadSpriteKarma(int whichDevice, int spriteEnUso, const unsigned char *bitmapOverride = nullptr)
 {
 
   if (enVassagoMode == 2)
@@ -264,7 +395,7 @@ void LoadSpriteKarma(int whichDevice, int spriteEnUso )
   // screen size
   int scrS = 240; // M5Dial
   // bitmap width/height
-  int bmpW = 200;
+  int bmpW = BITMAP_WIDTH;
   int bmpH = bmpW;
   // sprite width / height
   int sprW = 200;
@@ -284,7 +415,10 @@ void LoadSpriteKarma(int whichDevice, int spriteEnUso )
   // Sprite
 
   const unsigned char *bitmapToShow;
-  bitmapToShow = epd_bitmap_allArray[whichDevice];
+  if (bitmapOverride != nullptr)
+    bitmapToShow = bitmapOverride;
+  else
+    bitmapToShow = epd_bitmap_allArray[whichDevice];
 
   M5Dial.Lcd.clearDisplay(TFT_BLACK);
   sprite.setPsram(true);           // Optional if using large sprites
@@ -332,22 +466,44 @@ void ChangeShowingAnimation(bool value)
 /// @brief Handle the API call
 /// @param request full request
 /// @param data JSON data
-void postRule(AsyncWebServerRequest *request, uint8_t *data)
+void postRule(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total)
 {
-  size_t len = request->contentLength();
-  Serial.println("Data: ");
-  Serial.write(data, len); // Correctly print the received data
-  Serial.println("\nLength: ");
-  Serial.println(len);
-
-  // Construct the received data string with the specified length
-  String receivedData = "";
-  for (size_t i = 0; i < len; i++)
+  if (index == 0)
   {
-    receivedData += (char)data[i];
+    String *buffer = new String();
+    if (total > 0)
+      buffer->reserve(total);
+    request->_tempObject = buffer;
   }
 
-  Serial.println("Received Data String: " + receivedData);
+  String *buffer = reinterpret_cast<String *>(request->_tempObject);
+  if (buffer == nullptr)
+  {
+    request->send(500, "application/json", "{\"status\":\"request buffer error\"}");
+    return;
+  }
+
+  for (size_t i = 0; i < len; i++)
+    *buffer += (char)data[i];
+
+  if ((index + len) < total)
+    return;
+
+  auto releaseRequestBuffer = [&]() {
+    if (request->_tempObject != nullptr)
+    {
+      delete reinterpret_cast<String *>(request->_tempObject);
+      request->_tempObject = nullptr;
+    }
+  };
+
+  String &receivedData = *buffer;
+
+  Serial.println("\nPOST body length:");
+  Serial.println(receivedData.length());
+
+  String commandValue;
+  bool hasCommand = extractJsonStringField(receivedData, "command", commandValue);
 
   if (receivedData.indexOf("start") != -1)
   {
@@ -384,6 +540,7 @@ void postRule(AsyncWebServerRequest *request, uint8_t *data)
     request->send(200, "application/json", "{\"status\":\"restarting...\"}");
     Serial.println("Command received: reboot");
     delay(100); // allow time for response to be sent
+    releaseRequestBuffer();
     esp_restart();
     return; // technically not needed, but explicit
   }
@@ -422,6 +579,43 @@ void postRule(AsyncWebServerRequest *request, uint8_t *data)
     request->send(200, "application/json", "{\"status\":\"hint mode enabled\"}");
     Serial.println("Command received: hintliquidpuzle_b");
   }
+  else if ((receivedData.indexOf("hintliquidpuzle_manual") != -1) || (hasCommand && commandValue == "hintliquidpuzle_manual"))
+  {
+    int imageKeyPos = receivedData.indexOf("\"image\"");
+    if (imageKeyPos < 0)
+    {
+      request->send(400, "application/json", "{\"status\":\"missing image field\"}");
+      Serial.println("Command received: hintliquidpuzle_manual (missing image)");
+      releaseRequestBuffer();
+      return;
+    }
+
+    int imageColonPos = receivedData.indexOf(':', imageKeyPos);
+    if (imageColonPos < 0)
+    {
+      request->send(400, "application/json", "{\"status\":\"invalid image field\"}");
+      Serial.println("Command received: hintliquidpuzle_manual (invalid image field)");
+      releaseRequestBuffer();
+      return;
+    }
+
+    size_t parsedBytes = parseHexBitmapBytesFromIndex(receivedData, imageColonPos + 1, manualBitmapBuffer, MANUAL_BITMAP_BYTES);
+    if (parsedBytes != MANUAL_BITMAP_BYTES)
+    {
+      String errorJson = "{\"status\":\"invalid image size\",\"expected_bytes\":" + String(MANUAL_BITMAP_BYTES) + ",\"parsed_bytes\":" + String(parsedBytes) + "}";
+      request->send(400, "application/json", errorJson);
+      Serial.println("Command received: hintliquidpuzle_manual (invalid image size)");
+      releaseRequestBuffer();
+      return;
+    }
+
+    enVassagoMode = 1;
+    LoadSpriteKarma(deviceId, 9, manualBitmapBuffer);
+
+    String okJson = "{\"status\":\"hint manual loaded\",\"bytes\":" + String(parsedBytes) + "}";
+    request->send(200, "application/json", okJson);
+    Serial.println("Command received: hintliquidpuzle_manual");
+  }
   else if (receivedData.indexOf("finalgame") != -1)
   {
     ChangegameStarted(true);
@@ -438,6 +632,8 @@ void postRule(AsyncWebServerRequest *request, uint8_t *data)
     request->send(400, "application/json", "{\"status\":\"invalid command\"}");
     Serial.println("Invalid command");
   }
+
+  releaseRequestBuffer();
 }
 
 void playMatrixRain() {
@@ -836,7 +1032,7 @@ void setup() {
 
     // Start API server
     server.on("/api/command", HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL, [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total)
-              { postRule(request, data); });
+          { postRule(request, data, len, index, total); });
 
     server.begin();
 
