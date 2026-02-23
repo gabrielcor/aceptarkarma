@@ -58,8 +58,10 @@ HABinarySensor sensorTouchCounting("touchCounting");
 HABinarySensor sensorBlinkEnabled("blinkEnabled");
 HABinarySensor sensorShowingAnimation("showingAnimation");
 HASensor sensorIPAddress("deviceIPAddress");
+HASensor sensorSelectedOption("selectedOption");
 
 String deviceName;
+String selectedOptionValue = "INDEFINIDO";
 
 // Converted with https://rop.nl/truetype2gfx/
 // #include "include/NotoSansDevanagari_Regular20pt7b.h"
@@ -448,6 +450,20 @@ void ChangeBlinkEnabled(bool value)
   blinkEnabled = value;
   sensorBlinkEnabled.setState(blinkEnabled);
 }
+void ChangeSelectedOption(const String &value)
+{
+  selectedOptionValue = value;
+  sensorSelectedOption.setValue(selectedOptionValue.c_str());
+}
+void UpdateSelectedOptionFromSprite()
+{
+  if (spriteFinalenUso == 1)
+    ChangeSelectedOption("PROCEDER");
+  else if (spriteFinalenUso == 2)
+    ChangeSelectedOption("CANCELAR");
+  else
+    ChangeSelectedOption("INDEFINIDO");
+}
 
 void ChangeenJuegoFinal(bool value)
 {
@@ -457,6 +473,7 @@ void ChangeenJuegoFinal(bool value)
   {
     ChangeTouchCounting(false);
     ChangeBlinkEnabled(false);
+    ChangeSelectedOption("INDEFINIDO");
     M5.Speaker.stop();
   }
 }
@@ -517,6 +534,7 @@ void postRule(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t 
     ChangegameStarted(true);
     ChangeOnAnimation(true);
     ChangeenJuegoFinal(false);
+    ChangeSelectedOption("INDEFINIDO");
     oldPosition = -999;
     newPosition = -999;
 
@@ -527,6 +545,7 @@ void postRule(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t 
   {
     ChangegameStarted(false);
     ChangeenJuegoFinal(false);
+    ChangeSelectedOption("INDEFINIDO");
     M5Dial.Lcd.clearDisplay(TFT_BLACK);
     request->send(200, "application/json", "{\"status\":\"game shutdown\"}");
     Serial.println("Command received: shutdown");
@@ -628,6 +647,7 @@ void postRule(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t 
     ChangegameStarted(true);
     startPositionEndGame = oldPosition; // Guardar la posición de inicio del juego final
     ChangeenJuegoFinal(true);
+    ChangeSelectedOption("INDEFINIDO");
     request->send(200, "application/json", "{\"status\":\"finalgame started\"}");
     Serial.println("Command received: finalgame");
     spriteFinalenUso = defaultSpriteFinalEnUso; // Al iniciar el juego final, mostrar el sprite por defecto
@@ -1041,6 +1061,8 @@ void setup() {
     // sensorIPAddress.setValue("WARNING"); IMPORTANTE: aunque lo inicialicemos aquí no se ve, hay que hacerlo después.
 
     sensorIPAddress.setName("05 IP Address");
+    sensorSelectedOption.setName("06 selectedOption");
+    sensorSelectedOption.setValue(selectedOptionValue.c_str());
     // WiFi.localIP().toString().c_str()
     // sensor.setIcon("mdi:fire");
     mqtt.begin(BROKER_ADDR, BROKER_USERNAME, BROKER_PASSWORD);
@@ -1286,6 +1308,7 @@ void Check4TouchToPrint(int newPosition)
     // ¿Llegamos al umbral? activamos blink y congelamos la posición actual
     if (secs >= secondsToSelect && !blinkEnabled) {
       ChangeTouchCounting(false);
+      UpdateSelectedOptionFromSprite();
       ChangeBlinkEnabled(true);
       freezePositionAtSelect = oldPosition;   // congela la rotación en el ángulo actual
       blinkState = true;                      // empieza mostrándose
@@ -1320,6 +1343,7 @@ void loop() {
       // Actualizar el sensor de IP Address
       // Si no lo hacemos en el loop, no se actualiza en el setup no sirve
       sensorIPAddress.setValue(WiFi.localIP().toString().c_str());
+      sensorSelectedOption.setValue(selectedOptionValue.c_str());
 
     }
 
