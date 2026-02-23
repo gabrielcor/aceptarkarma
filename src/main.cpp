@@ -437,11 +437,6 @@ void ChangegameStarted(bool value)
   gameStarted = value;
   sensorgameStarted.setState(gameStarted);
 }
-void ChangeenJuegoFinal(bool value)
-{
-  enJuegoFinal = value;
-  sensorenJuegoFinal.setState(enJuegoFinal);
-}
 // add for touchcounting and blinkenabled
 void ChangeTouchCounting(bool value)
 {
@@ -452,6 +447,18 @@ void ChangeBlinkEnabled(bool value)
 {
   blinkEnabled = value;
   sensorBlinkEnabled.setState(blinkEnabled);
+}
+
+void ChangeenJuegoFinal(bool value)
+{
+  enJuegoFinal = value;
+  sensorenJuegoFinal.setState(enJuegoFinal);
+  if (!enJuegoFinal)
+  {
+    ChangeTouchCounting(false);
+    ChangeBlinkEnabled(false);
+    M5.Speaker.stop();
+  }
 }
 void ChangeOnAnimation(bool value)
 {
@@ -1244,6 +1251,17 @@ void Check4TouchToPrint(int newPosition)
 
   auto t = M5Dial.Touch.getDetail();
 
+  // Si ya estamos en blink, gestionar el parpadeo aunque no haya toque
+  if (blinkEnabled) {
+    uint32_t now = millis();
+    if (now - lastBlinkToggleMs >= BLINK_INTERVAL_MS) {
+      lastBlinkToggleMs = now;
+      blinkState = !blinkState;
+      if (blinkState) showFrozenSprite(); else hideSprite();
+    }
+    return;  // no seguimos con conteo ni rotación
+  }
+
   if (t.isPressed()) {
     // Si recién empieza el toque, inicializa el conteo
     if (!touchCounting) {
@@ -1251,18 +1269,7 @@ void Check4TouchToPrint(int newPosition)
       touchStartMs = millis();
       lastShownCount = 0;
       // Si veníamos de un blink anterior (por seguridad), lo apagamos
-      ChangeTouchCounting(true);
-    }
-
-    // Si ya estamos en blink, solo gestionar el parpadeo y salir
-    if (blinkEnabled) {
-      uint32_t now = millis();
-      if (now - lastBlinkToggleMs >= BLINK_INTERVAL_MS) {
-        lastBlinkToggleMs = now;
-        blinkState = !blinkState;
-        if (blinkState) showFrozenSprite(); else hideSprite();
-      }
-      return;  // no seguimos con números ni rotación
+      ChangeBlinkEnabled(false);
     }
 
     // Aún no parpadeamos: calcular segundos transcurridos
@@ -1278,6 +1285,7 @@ void Check4TouchToPrint(int newPosition)
 
     // ¿Llegamos al umbral? activamos blink y congelamos la posición actual
     if (secs >= secondsToSelect && !blinkEnabled) {
+      ChangeTouchCounting(false);
       ChangeBlinkEnabled(true);
       freezePositionAtSelect = oldPosition;   // congela la rotación en el ángulo actual
       blinkState = true;                      // empieza mostrándose
