@@ -799,6 +799,14 @@ void HandleEmergencyRestartByTap()
   bool isPressed = touch.isPressed();
   uint32_t now = millis();
 
+  if (enJuegoFinal)
+  {
+    emergencyTapCount = 0;
+    lastEmergencyTapMs = 0;
+    lastTouchPressed = isPressed;
+    return;
+  }
+
   if (isPressed && !lastTouchPressed)
   {
     if (now - lastEmergencyTapMs < TAP_DEBOUNCE_MS)
